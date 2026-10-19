@@ -1017,7 +1017,7 @@ function renderKpis(agg){
     <div class="kpi"><p class="label">Returns</p><p class="value">${fmt(agg.returns)}</p><p class="sub">units returned, this period</p></div>
   `;
   const from = DATA.weekLabels[0], to = DATA.weekLabels[DATA.weekLabels.length-1];
-  document.getElementById('dateRangeText').textContent = `Weekly Unit Sales By Store · Week Ending ${from} – ${to} · ${DATA.weeks.length} Weekly Reports`;
+  document.getElementById('dateRangeText').textContent = `Weekly Unit Sales By Store · ${from} – ${to} · ${DATA.weeks.length} Weekly Reports`;
 }
 
 /* ============ Leaderboard ============ */
@@ -1302,7 +1302,7 @@ function updateFreshnessBadge(){
   else if (weeksSince < 4){ cls = 'due'; label = `${weeksSince} Wks Behind`; }
   else { cls = 'stale'; label = `${weeksSince} Wks Behind`; }
   badge.className = 'freshness ' + cls;
-  badge.textContent = `Latest Week Ending: ${latestLabel} · ${label}`;
+  badge.textContent = `Latest Week: ${latestLabel} · ${label}`;
 }
 async function attemptLiveLoad(){
   const live = await tryLoadLive();

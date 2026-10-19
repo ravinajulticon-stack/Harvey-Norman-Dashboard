@@ -579,7 +579,7 @@ function updateFreshnessBadge(){
   else if (weeksSince < 4){ cls = 'due'; label = `${weeksSince} Wks Behind`; }
   else { cls = 'stale'; label = `${weeksSince} Wks Behind`; }
   badge.className = 'freshness ' + cls;
-  badge.textContent = `Latest Week Ending: ${fmtWeekLabel(latest)} · ${label}`;
+  badge.textContent = `Latest Week: ${fmtWeekLabel(latest)} · ${label}`;
 }
 
 /* ============ Filters ============ */
