@@ -1,0 +1,1542 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Harvey Norman Store Sales</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{
+  --page-bg:#f9f9f7;
+  --surface:#fcfcfb;
+  --surface-2:#ffffff;
+  --text-primary:#0b0b0b;
+  --text-secondary:#52514e;
+  --text-muted:#898781;
+  --border:rgba(11,11,11,0.10);
+  --grid:#e1e0d9;
+  --baseline:#c3c2b7;
+  --accent:#2a78d6;
+  --accent-soft:rgba(42,120,214,0.12);
+  --accent-wash:rgba(42,120,214,0.08);
+  --good:#0ca30c;
+  --critical:#d03b3b;
+  --warn:#b8860b;
+  --good-soft:rgba(12,163,12,0.12);
+  --warn-soft:rgba(184,134,11,0.14);
+  --critical-soft:rgba(208,59,59,0.12);
+  --shadow:0 1px 2px rgba(11,11,11,0.04), 0 8px 24px rgba(11,11,11,0.06);
+  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#eda100; --s5:#e87ba4; --s6:#008300;
+  color-scheme:light;
+}
+/* Dark mode auto-switch removed (Sep 2026) — Jerald wants this dashboard to
+   always render in light mode, regardless of the viewer's OS/browser theme
+   setting, to match the Sales Rep Dashboard's look. The :root variables
+   above are now the only theme the page uses. */
+
+*{box-sizing:border-box;}
+html,body{background:var(--page-bg);}
+body{
+  color:var(--text-primary);
+  font-family:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+  padding-inline:16px;
+  padding-block:28px 48px;
+  margin:0;
+}
+.wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:22px;}
+
+/* ---------- Titlebar ---------- */
+.titlebar{background:var(--surface);border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow);padding:16px 22px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;}
+.dots{display:flex;gap:7px;flex:0 0 auto;}
+.dot{width:12px;height:12px;border-radius:50%;}
+.dot.red{background:#ff5f57;} .dot.yellow{background:#febc2e;} .dot.green{background:#28c840;}
+.titletext{flex:1 1 220px;min-width:0;}
+.titletext h1{font-size:16px;font-weight:600;margin:0;letter-spacing:-0.01em;}
+.titletext p{margin:2px 0 0;font-size:12.5px;color:var(--text-muted);}
+.toolbtns{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+.iconbtn{
+  display:inline-flex;align-items:center;gap:6px;
+  font-size:12px;font-weight:600;font-family:inherit;
+  color:var(--text-secondary);background:var(--surface-2);
+  border:1px solid var(--border);border-radius:9px;padding:7px 13px;cursor:pointer;
+}
+.iconbtn:hover{color:var(--text-primary);border-color:var(--accent);}
+.badge{font-size:11.5px;font-weight:600;color:var(--accent);background:var(--accent-soft);padding:5px 11px;border-radius:99px;white-space:nowrap;}
+.srcbadge{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:600;padding:5px 10px;border-radius:99px;white-space:nowrap;border:1px solid var(--border);color:var(--text-secondary);cursor:pointer;background:var(--surface-2);}
+.srcbadge .dot2{width:7px;height:7px;border-radius:50%;background:var(--text-muted);}
+.srcbadge.live .dot2{background:var(--good);}
+.srcbadge.live{color:var(--good);}
+.freshness{display:inline-flex;align-items:center;font-size:11px;font-weight:600;padding:5px 10px;border-radius:99px;white-space:nowrap;border:1px solid var(--border);background:var(--surface-2);color:var(--text-secondary);}
+.freshness.fresh{color:var(--good);border-color:transparent;background:var(--good-soft);}
+.freshness.due{color:var(--warn);border-color:transparent;background:var(--warn-soft);}
+.freshness.stale{color:var(--critical);border-color:transparent;background:var(--critical-soft);}
+
+/* ---------- KPI strip ---------- */
+.kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;}
+.kpi{background:var(--surface);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);padding:16px 18px;min-width:0;}
+.kpi .label{font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-muted);margin:0 0 8px;}
+.kpi .value{font-size:26px;font-weight:600;letter-spacing:-0.01em;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.kpi .sub{margin:4px 0 0;font-size:12px;color:var(--text-secondary);}
+
+/* ---------- Filter bar ---------- */
+.filterbar{background:var(--surface);border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow);padding:16px 20px;display:flex;flex-direction:column;gap:12px;}
+.filterrow{display:flex;align-items:center;gap:16px;flex-wrap:wrap;}
+.filtergroup{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.filtergroup .flabel{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-muted);margin-right:2px;}
+.seg{display:inline-flex;background:var(--surface-2);border:1px solid var(--border);border-radius:9px;padding:2px;gap:2px;}
+.seg button{
+  font-family:inherit;font-size:12px;font-weight:600;color:var(--text-secondary);
+  background:transparent;border:none;border-radius:7px;padding:6px 11px;cursor:pointer;
+}
+.seg button.active{background:var(--accent);color:#fff;}
+.pill{
+  font-family:inherit;font-size:12px;font-weight:600;color:var(--text-secondary);
+  background:var(--surface-2);border:1px solid var(--border);border-radius:99px;padding:6px 13px;cursor:pointer;
+}
+.pill.active{background:var(--accent-soft);color:var(--accent);border-color:var(--accent);}
+.range-custom{display:none;align-items:center;gap:6px;}
+.range-custom.show{display:flex;}
+.range-custom select{padding:6px 26px 6px 10px;font-size:12px;min-width:0;}
+
+.dropdown{position:relative;}
+.dropdown-btn{
+  font-family:inherit;font-size:12px;font-weight:600;color:var(--text-secondary);
+  background:var(--surface-2);border:1px solid var(--border);border-radius:9px;padding:7px 12px;cursor:pointer;
+  display:inline-flex;align-items:center;gap:6px;
+}
+.dropdown-btn.active{border-color:var(--accent);color:var(--accent);}
+.dropdown-panel{
+  display:none;position:absolute;top:calc(100% + 6px);left:0;z-index:20;
+  background:var(--surface-2);border:1px solid var(--border);border-radius:11px;box-shadow:var(--shadow);
+  padding:10px;width:280px;max-height:320px;overflow-y:auto;
+}
+.dropdown-panel.show{display:block;}
+.dropdown-panel input[type="text"]{
+  width:100%;padding:7px 10px;font-size:12.5px;font-family:inherit;border:1px solid var(--border);
+  border-radius:7px;background:var(--surface);color:var(--text-primary);margin-bottom:8px;
+}
+.dropdown-actions{display:flex;justify-content:space-between;margin-bottom:6px;}
+.linklike{font-size:11px;font-weight:600;color:var(--accent);background:none;border:none;cursor:pointer;font-family:inherit;padding:0;}
+.chk-row{display:flex;align-items:flex-start;gap:8px;padding:5px 2px;font-size:12.5px;cursor:pointer;border-radius:6px;}
+.chk-row:hover{background:var(--accent-wash);}
+.chk-row input{margin-top:2px;}
+.chk-row .ci-item{font-weight:600;display:block;}
+.chk-row .ci-desc{color:var(--text-muted);font-size:11px;display:block;}
+.filter-summary{font-size:12px;color:var(--text-muted);}
+.filter-summary b{color:var(--text-secondary);font-weight:600;}
+.reset-link{margin-left:auto;}
+.tag-comm{font-size:10px;font-weight:700;color:var(--text-muted);background:var(--grid);padding:1px 6px;border-radius:5px;margin-left:6px;letter-spacing:0.02em;vertical-align:1px;}
+
+/* ---------- Panels ---------- */
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow);padding:20px 22px 22px;}
+.panel-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px;}
+.panel-head h2{font-size:14.5px;font-weight:600;margin:0;letter-spacing:-0.005em;}
+.panel-head .hint{font-size:12px;color:var(--text-muted);}
+
+/* ---------- Chart ---------- */
+.chart-wrap{position:relative;}
+.chart-wrap svg{width:100%;height:auto;display:block;overflow:visible;}
+.bar{fill:var(--accent);cursor:pointer;}
+.bar:hover{opacity:0.82;}
+.bar.zero{fill:var(--grid);}
+.gridline{stroke:var(--grid);stroke-width:1;shape-rendering:crispEdges;}
+.baseline{stroke:var(--baseline);stroke-width:1;shape-rendering:crispEdges;}
+.axis-label{fill:var(--text-muted);font-size:10.5px;font-family:inherit;}
+.value-label{fill:var(--text-secondary);font-size:10.5px;font-weight:600;font-family:inherit;}
+.line-path{fill:none;stroke-width:2;}
+.line-dot{cursor:pointer;}
+.empty-state{padding:40px 10px;text-align:center;color:var(--text-muted);font-size:13px;}
+
+.tooltip{
+  position:absolute;pointer-events:none;background:var(--text-primary);color:var(--page-bg);
+  font-size:11.5px;font-weight:600;padding:6px 10px;border-radius:8px;transform:translate(-50%,-115%);
+  white-space:nowrap;opacity:0;transition:opacity .1s ease;z-index:5;box-shadow:0 4px 14px rgba(0,0,0,0.25);
+}
+.tooltip .sub{display:block;font-weight:400;opacity:0.75;font-size:10.5px;margin-top:1px;}
+.tooltip.show{opacity:1;}
+
+/* ---------- Leaderboard ---------- */
+.board{display:grid;grid-template-columns:1fr 1fr;grid-auto-flow:column;grid-template-rows:repeat(var(--board-rows,12),auto);gap:8px 22px;}
+.board-row{display:grid;grid-template-columns:20px 1fr auto;align-items:center;gap:9px;padding:7px 8px;border-radius:8px;cursor:pointer;background:transparent;border:1px solid transparent;}
+.board-row:hover{background:var(--accent-wash);}
+.board-row.active{background:var(--accent-soft);border-color:var(--accent);}
+.board-rank{font-size:11px;color:var(--text-muted);font-weight:600;text-align:right;}
+.board-main{min-width:0;}
+.board-name{font-size:13px;font-weight:500;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.board-track{height:5px;border-radius:99px;background:var(--grid);margin-top:5px;overflow:hidden;}
+.board-fill{height:100%;background:var(--accent);border-radius:99px;}
+.board-right{display:flex;flex-direction:column;align-items:flex-end;gap:2px;}
+.board-value{font-size:12.5px;font-weight:600;color:var(--text-secondary);font-variant-numeric:tabular-nums;white-space:nowrap;}
+.trend{font-size:10.5px;font-weight:700;white-space:nowrap;}
+.trend.up{color:var(--good);}
+.trend.down{color:var(--critical);}
+.trend.flag{color:var(--critical);background:rgba(208,59,59,0.12);padding:1px 6px;border-radius:5px;}
+.trend.new{color:var(--accent);}
+.trend.flat{color:var(--text-muted);}
+.channel-toggle-row{display:flex;justify-content:flex-end;gap:10px;margin-bottom:10px;flex-wrap:wrap;}
+.upload-card{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;border-style:dashed;}
+.upload-card .upload-info{min-width:220px;flex:1 1 320px;}
+.upload-card h2{font-size:14.5px;font-weight:600;margin:0 0 3px;}
+.upload-card p{margin:0;font-size:12px;color:var(--text-muted);max-width:640px;}
+.upload-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+.iconbtn.primary{background:var(--accent);border-color:var(--accent);color:#fff;}
+.iconbtn.primary:hover{color:#fff;border-color:var(--accent);}
+.iconbtn:disabled{opacity:0.45;cursor:not-allowed;}
+#uploadStatus{font-size:12px;margin-top:6px;}
+#uploadStatus.err{color:var(--critical);}
+#uploadStatus.ok{color:var(--good);}
+#uploadStatus.busy{color:var(--warn);}
+
+/* ---------- Tabs ---------- */
+.tabs{display:inline-flex;background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:3px;gap:2px;margin-bottom:16px;}
+.tabs button{font-family:inherit;font-size:12.5px;font-weight:600;color:var(--text-secondary);background:transparent;border:none;border-radius:8px;padding:8px 16px;cursor:pointer;}
+.tabs button.active{background:var(--accent);color:#fff;}
+.tabpane{display:none;}
+.tabpane.active{display:block;}
+
+/* ---------- Store detail controls ---------- */
+.controls{display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap;margin-bottom:18px;}
+.field{display:flex;flex-direction:column;gap:6px;}
+.field label{font-size:11.5px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;}
+select{
+  appearance:none;background:var(--surface-2);color:var(--text-primary);border:1px solid var(--border);
+  border-radius:9px;padding:9px 34px 9px 12px;font-size:13.5px;font-family:inherit;font-weight:500;min-width:240px;
+  background-image:linear-gradient(45deg,transparent 50%,var(--text-muted) 50%),linear-gradient(135deg,var(--text-muted) 50%,transparent 50%);
+  background-position:calc(100% - 18px) center,calc(100% - 13px) center;background-size:5px 5px,5px 5px;background-repeat:no-repeat;cursor:pointer;
+}
+select:focus-visible{outline:2px solid var(--accent);outline-offset:1px;}
+
+.mini-kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:18px;}
+.mini-kpi{background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:11px 14px;}
+.mini-kpi .label{font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-muted);margin:0 0 5px;}
+.mini-kpi .value{font-size:18px;font-weight:600;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.mini-kpi .value.small{font-size:13.5px;}
+
+/* ---------- Table ---------- */
+.table-scroll{overflow-x:auto;}
+table{width:100%;border-collapse:collapse;font-size:13px;min-width:480px;}
+thead th{text-align:left;font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-muted);padding:0 10px 8px;border-bottom:1px solid var(--border);}
+thead th.num{text-align:right;}
+tbody td{padding:9px 10px;border-bottom:1px solid var(--border);color:var(--text-secondary);vertical-align:top;}
+tbody tr:last-child td{border-bottom:none;}
+tbody td.item{color:var(--text-primary);font-weight:600;font-size:12.5px;}
+tbody td.desc{font-size:12px;}
+tbody td.brand{font-size:11.5px;color:var(--text-muted);}
+tbody td.num{text-align:right;font-variant-numeric:tabular-nums;font-weight:600;color:var(--text-primary);}
+
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:18px;}
+
+/* ---------- Compare tab ---------- */
+.chip-picker{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:14px;position:relative;}
+.chip{display:inline-flex;align-items:center;gap:7px;background:var(--surface-2);border:1px solid var(--border);border-radius:99px;padding:5px 6px 5px 12px;font-size:12.5px;font-weight:600;}
+.chip .sw{width:9px;height:9px;border-radius:50%;flex:0 0 auto;}
+.chip button{background:var(--grid);border:none;border-radius:50%;width:17px;height:17px;line-height:1;cursor:pointer;color:var(--text-secondary);font-size:12px;}
+.add-store{position:relative;}
+.legend{display:flex;flex-wrap:wrap;gap:14px;margin-top:10px;justify-content:center;}
+.legend-item{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-secondary);}
+.legend-item .sw{width:10px;height:10px;border-radius:3px;}
+.compare-empty{padding:50px 10px;text-align:center;color:var(--text-muted);font-size:13.5px;}
+
+footer{text-align:center;font-size:11.5px;color:var(--text-muted);padding-top:4px;}
+
+@media (max-width:860px){
+  .kpis{grid-template-columns:repeat(2,1fr);}
+  .board{grid-template-columns:1fr;grid-auto-flow:row;grid-template-rows:none;}
+  .two-col{grid-template-columns:1fr;}
+  .mini-kpis{grid-template-columns:repeat(2,1fr);}
+  select{min-width:0;width:100%;}
+  .filterrow{gap:10px;}
+  /* touch target polish */
+  .board-row{padding:11px 8px;min-height:44px;}
+  .chip{padding:8px 8px 8px 14px;}
+  .chip button{width:23px;height:23px;font-size:14px;}
+  .chk-row{padding:9px 4px;min-height:40px;}
+  .pill,.seg button,.dropdown-btn,.iconbtn{padding-block:9px;}
+  .srcbadge{padding-block:8px;}
+}
+
+@media print{
+  body{background:#fff !important;color:#000 !important;padding:0;}
+  .filterbar,.toolbtns,.controls,select,.tabs,.channel-toggle-row,.upload-card,.freshness{display:none !important;}
+  .panel,.titlebar,.kpi,.mini-kpi{box-shadow:none !important;border:1px solid #ccc !important;background:#fff !important;}
+  .tabpane{display:block !important;}
+  .panel{break-inside:avoid;}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="titlebar">
+    <div class="dots"><span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span></div>
+    <div class="titletext">
+      <h1>Harvey Norman &mdash; Store Sales Dashboard</h1>
+      <p id="dateRangeText">Weekly Unit Sales By Store</p>
+    </div>
+    <span class="freshness" id="freshnessBadge" title="How recent the newest loaded week is"></span>
+    <button class="srcbadge" id="srcBadge" title="Click to retry loading live data">
+      <span class="dot2"></span><span id="srcBadgeText">Snapshot Data</span>
+    </button>
+    <div class="toolbtns">
+      <a class="iconbtn" href="models.html">Sales per Model per Store</a>
+      <button class="iconbtn" id="btnCsv">Download CSV</button>
+      <button class="iconbtn" id="btnPrint">Print / Save PDF</button>
+    </div>
+    <span class="badge">For BDM Store Visits</span>
+  </div>
+
+  <div class="panel upload-card" id="uploadCard">
+    <div class="upload-info">
+      <h2>Add This Week&rsquo;s Harvey Norman File</h2>
+      <p>Choose the weekly &ldquo;Digital Door Locks PTY LTD&rdquo; stock and sales file (.xls) exactly as Harvey Norman sends it &mdash; you can pick several weeks at once. It is read in your browser, checked against the Summary sheet total, then saved to Supabase once the passphrase is accepted. Uploading the same week again replaces that week instead of duplicating it.</p>
+      <div id="uploadStatus"></div>
+    </div>
+    <div class="upload-actions">
+      <input type="file" id="csvInput" accept=".xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" multiple style="display:none">
+      <input type="password" id="uploadPassphrase" placeholder="Upload Passphrase" autocomplete="off" class="iconbtn" style="cursor:text;">
+      <button class="iconbtn" id="chooseCsv">Choose File</button>
+      <button class="iconbtn primary" id="doUpload" disabled>Add to Dashboard</button>
+    </div>
+  </div>
+
+  <div class="kpis" id="kpiStrip"></div>
+
+  <div class="filterbar">
+    <div class="filterrow">
+      <div class="filtergroup">
+        <span class="flabel">Weeks</span>
+        <div class="seg" id="segRange">
+          <button data-range="all" class="active">All</button>
+          <button data-range="4">Last 4</button>
+          <button data-range="8">Last 8</button>
+          <button data-range="custom">Custom</button>
+        </div>
+        <div class="range-custom" id="rangeCustom">
+          <select id="fromWeek"></select>
+          <span style="color:var(--text-muted);font-size:12px;">to</span>
+          <select id="toWeek"></select>
+        </div>
+      </div>
+
+      <div class="filtergroup">
+        <span class="flabel">Units</span>
+        <div class="seg" id="segUnits">
+          <button data-unit="net" class="active">Net</button>
+          <button data-unit="gross">Gross</button>
+        </div>
+      </div>
+
+      <div class="filtergroup">
+        <span class="flabel">Brand</span>
+        <button class="pill active" data-brand="__all__">All</button>
+        <span id="brandPills"></span>
+      </div>
+
+      <div class="filtergroup">
+        <span class="flabel">Banner</span>
+        <button class="pill active" data-banner="__all__">All</button>
+        <span id="bannerPills"></span>
+      </div>
+
+      <div class="filtergroup">
+        <span class="flabel">Store Type</span>
+        <div class="seg" id="segChannel">
+          <button data-channel="stores" class="active">Retail Stores</button>
+          <button data-channel="all">Include Commercial &amp; Online</button>
+        </div>
+      </div>
+
+      <div class="filtergroup dropdown" id="productDropdown">
+        <span class="flabel">Product</span>
+        <button class="dropdown-btn" id="productBtn">All Products <span style="opacity:.6;">&#9662;</span></button>
+        <div class="dropdown-panel" id="productPanel">
+          <input type="text" id="productSearch" placeholder="Search item code or description&hellip;">
+          <div class="dropdown-actions">
+            <button class="linklike" id="productAll">Select All</button>
+            <button class="linklike" id="productNone">Clear</button>
+          </div>
+          <div id="productList"></div>
+        </div>
+      </div>
+
+      <button class="linklike reset-link" id="btnReset">Reset Filters</button>
+    </div>
+    <div class="filter-summary" id="filterSummary"></div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head">
+      <h2>Weekly Trend &mdash; All Stores</h2>
+      <span class="hint">Total Harvey Norman units sold per week (week ending Sunday), matching the filters above</span>
+    </div>
+    <div class="chart-wrap" id="companyChart"></div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head">
+      <h2 id="rankTitle">Top Stores</h2>
+      <span class="hint">Top 24 by total units in range &middot; trend compares the most recent weeks to the weeks before &middot; click a store to open it in Store Detail</span>
+    </div>
+    <div class="channel-toggle-row">
+      <div class="seg" id="segStoreRank">
+        <button data-rank="top" class="active">Top</button>
+        <button data-rank="weakest">Weakest</button>
+      </div>
+    </div>
+    <div class="board" id="board"></div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head">
+      <h2>No Movement</h2>
+      <span class="hint">Stores with zero units sold in this selection<span id="noMoveCount"></span> &middot; longest without a sale first (top 24 shown) &middot; click a store to open it in Store Detail</span>
+    </div>
+    <div class="board" id="noMoveBoard"></div>
+  </div>
+
+  <div class="panel">
+    <div class="tabs" id="tabs">
+      <button data-tab="detail" class="active">Store Detail</button>
+      <button data-tab="compare">Compare Stores</button>
+    </div>
+
+    <div class="tabpane active" id="tab-detail">
+      <div class="controls">
+        <div class="field">
+          <label for="storeSelect">Store</label>
+          <select id="storeSelect"></select>
+        </div>
+      </div>
+      <div class="mini-kpis" id="storeKpis"></div>
+      <div class="two-col">
+        <div>
+          <div class="panel-head" style="margin-bottom:10px;"><h2 style="font-size:12.5px;">Weekly Units At This Store</h2></div>
+          <div class="chart-wrap" id="storeChart"></div>
+        </div>
+        <div>
+          <div class="panel-head" style="margin-bottom:10px;"><h2 style="font-size:12.5px;">Products Sold At This Store</h2></div>
+          <div class="table-scroll">
+            <table>
+              <thead><tr><th>Item Code</th><th>Description</th><th>Brand</th><th class="num">Units</th></tr></thead>
+              <tbody id="productTable"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tabpane" id="tab-compare">
+      <div class="chip-picker" id="compareChips"></div>
+      <div class="add-store dropdown" id="storeAddDropdown">
+        <button class="dropdown-btn" id="storeAddBtn">+ Add a Store to Compare</button>
+        <div class="dropdown-panel" id="storeAddPanel">
+          <input type="text" id="storeAddSearch" placeholder="Search stores&hellip;">
+          <div id="storeAddList"></div>
+        </div>
+      </div>
+      <div class="chart-wrap" id="compareChart" style="margin-top:16px;"></div>
+      <div class="legend" id="compareLegend"></div>
+      <div class="table-scroll" style="margin-top:18px;">
+        <table>
+          <thead><tr><th>Store</th><th class="num">Total Units</th><th class="num">Active Weeks</th><th class="num">Avg / Active Wk</th><th>Best Week</th></tr></thead>
+          <tbody id="compareTable"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <footer id="footerNote">Source: weekly Harvey Norman &ldquo;Stock And Sales&rdquo; files (Sales sheet). Weeks are labelled by week ending (Sunday). Negative quantities are returns and are shown, not hidden. Includes Harvey Norman, Domayne and Joyce Mayne stores.</footer>
+</div>
+
+<div class="tooltip" id="tooltip"></div>
+
+<script>
+/* ============================================================
+   CONFIG — live data source.
+   Project: "Bunnings-Weekly-Report" (vggbzpvgukprwpopewot.supabase.co),
+   shared with Bing Lee but using its own Harvey Norman tables:
+     harvey_norman_sales_rows  — non-zero sales, one row per week x store x item
+     harvey_norman_stores      — every store column in the Sales sheet (for No Movement)
+     harvey_norman_weeks       — every week loaded
+   The publishable key can only READ these tables. Uploads go through the
+   harvey_norman_upload() database function, which checks the passphrase
+   server-side (bcrypt hash in a private schema the page cannot read).
+   ============================================================ */
+const SUPABASE_URL = 'https://vggbzpvgukprwpopewot.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_hG5I11kQ9k5IBYrHaCTkRg_WrwCXYAG';
+const SUPABASE_TABLE = 'harvey_norman_sales_rows';
+const STORES_TABLE = 'harvey_norman_stores';
+const WEEKS_TABLE = 'harvey_norman_weeks';
+const UPLOAD_RPC = 'harvey_norman_upload';
+
+/* ============ Embedded fallback snapshot (15 weeks, w/e 05 Jul to 11 Oct 2026) ============ */
+const EMBEDDED_DATA = {"weeks":["2026-07-05","2026-07-12","2026-07-19","2026-07-26","2026-08-02","2026-08-09","2026-08-16","2026-08-23","2026-08-30","2026-09-06","2026-09-13","2026-09-20","2026-09-27","2026-10-04","2026-10-11"],"weekLabels":["05 Jul","12 Jul","19 Jul","26 Jul","02 Aug","09 Aug","16 Aug","23 Aug","30 Aug","06 Sep","13 Sep","20 Sep","27 Sep","04 Oct","11 Oct"],"stores":["DM Fyshwick","DM Online","DM Warrawong","HN Albany","HN Albury","HN Alice Springs","HN Ararat","HN Armadale","HN Armidale","HN Aspley","HN Atherton","HN Auburn","HN Ayr","HN Bairnsdale","HN Balgowlah","HN Ballarat","HN Ballina","HN Bateman's Bay","HN Bathurst","HN Belconnen","HN Bendigo","HN Blacktown","HN Bondi Junction","HN Booval","HN Broadmeadows","HN Broadway Sydney","HN Broken Hill","HN Broome","HN Browns Plains","HN Bunbury","HN Bundaberg","HN Bundall","HN Burleigh Waters","HN Burnie","HN Busselton","HN Cairns","HN Cambridge Park","HN Campbelltown","HN Cannington","HN Cannonvale","HN Capalaba","HN Carindale","HN Caringbah AVIT","HN Caringbah Insurance","HN Castle Hill","HN Chadstone","HN Charters Towers","HN Chirnside Park","HN City Cross","HN City West","HN Cobar","HN Coffs Harbour","HN Comm Osborne Park","HN Commercial Bundall","HN Corio","HN Dalby","HN Dandenong","HN Darwin","HN Deniliquin","HN Devonport","HN Dubbo","HN Echuca","HN Emerald","HN Everton Park","HN Forster","HN Fortitude Valley","HN Fountain Gate","HN Frankston","HN Fyshwick","HN Geelong","HN Gepps Cross","HN Geraldton","HN Gladstone","HN Gordon","HN Gosford","HN Goulburn","HN Grafton","HN Griffith","HN Gunnedah","HN Gympie","HN Hamilton-1","HN Hervey Bay","HN Hobart City","HN Hoppers Crossing","HN Hornsby","HN Horsham","HN Ingham","HN Innisfail","HN Inverell","HN Joondalup","HN Kalgoorlie","HN Karratha","HN Kingaroy","HN Kotara","HN Lakehaven","HN Launceston","HN Lismore","HN Lithgow","HN Liverpool","HN Loganholme","HN Macgregor","HN Mackay","HN Maclean","HN Maitland","HN Malaga","HN Mandurah","HN Manjimup","HN Maribyrnong","HN Marion","HN Marketplace","HN Maroochydore","HN Maryborough","HN Mcgraths Hill","HN Melton","HN Midland","HN Mildura","HN Moe","HN Moonah","HN Moorabbin","HN Moore Park","HN Morayfield","HN Moree","HN Mornington","HN Morwell","HN Moss Vale","HN Mt Barker","HN Mt Gambier","HN Mt Isa","HN Mudgee","HN Munno Para","HN Murwillumbah","HN Muswellbrook","HN Newcastle","HN Noarlunga","HN Noosa","HN Nowra","HN Nunawading","HN O'Connor","HN Orange","HN Osborne Park","HN Oxley","HN Parkes","HN Penrith","HN Port Hedland","HN Port Kennedy","HN Port Lincoln","HN Port Macquarie","HN Port Pirie","HN Port Stephens","HN Preston","HN Renmark","HN Richmond","HN Rockhampton","HN Rothwell","HN Sale","HN Shepparton","HN Springvale","HN Sunshine","HN Swan Hill","HN Tamworth","HN Taree","HN Taylors Lakes","HN Temora","HN Thomastown","HN Toowoomba","HN Townsville","HN Traralgon","HN Tumut","HN Tura Beach","HN Tweed Heads","HN Wagga Wagga","HN Wangaratta","HN Warragul","HN Warrawong","HN Warrnambool","HN Warwick-1","HN Waurn Ponds","HN Whyalla","HN Wiley Park","HN Wonthaggi","HN Woodville","HN Young","HN at DM Alexandria","HN at DM Auburn","HN at DM Belrose","HN at DM Melbourne QV","HN at DM Nth Ryde","HN at DM West Gosford","JM Chancellor Park","JM Darwin","JM Maroochydore","JM Townsville"],"brands":["PHILIPS","SAMSUNG"],"products":[{"item":"DDL709-7HWS-B","desc":"PHILIPS 3IN1 EXTERNAL SMARTLOCK BLACK","brand":"PHILIPS"},{"item":"DDL210S-1H-B","desc":"PHILIPS EXTERNAL DIY DEADBOLT LOCK BLK","brand":"PHILIPS"},{"item":"DDL709-7HWS-C","desc":"PHILIPS 3IN1 EXTERNAL SMART LOCK COPPER","brand":"PHILIPS"},{"item":"7300-5HB-COPPER","desc":"PHILIPS SMART EXTERNAL HANDLE LOCK","brand":"PHILIPS"},{"item":"DDL608-5HWS-B","desc":"PHILIPS WI-FI FINGERPRINT DOOR LOCK BLK","brand":"PHILIPS"},{"item":"DDL608-5HWS-S","desc":"PHILIPS WI-FI FINGERPRINT DOOR LOCK SLV","brand":"PHILIPS"},{"item":"ALPHA-VP-5HWS-B","desc":"PHILIPS 2IN1 EXTERNAL SMART LOCK BLACK","brand":"PHILIPS"},{"item":"DDL210S-1H-N","desc":"PHILIPS EXTERNAL DIY DEADBOLT LOCK NIKL","brand":"PHILIPS"},{"item":"SHP-A30FCDS/EN","desc":"SAMSUNG WI-FI BIOMETRIC DEADBOLT LOCK","brand":"SAMSUNG"}],"rows":[[11,0,0,0,1],[11,7,0,0,1],[11,187,0,0,1],[11,11,0,0,1],[11,24,0,0,1],[11,66,0,0,2],[11,72,0,0,1],[11,139,0,0,1],[11,140,0,0,1],[11,142,0,0,1],[11,151,0,0,1],[11,157,0,0,1],[11,31,0,1,1],[11,44,0,1,1],[11,89,0,1,1],[11,104,0,1,-1],[11,140,0,1,1],[11,159,0,1,1],[11,15,0,2,1],[11,51,0,2,-1],[11,66,0,2,-1],[11,142,0,2,1],[11,149,0,2,1],[11,140,0,3,-1],[0,11,0,0,2],[0,98,0,0,1],[0,129,0,0,1],[0,136,0,0,1],[0,142,0,0,2],[0,161,0,0,1],[0,42,0,3,1],[0,164,0,3,1],[0,49,0,1,1],[0,82,0,1,1],[0,100,0,1,-1],[0,51,0,2,1],[0,42,0,4,-1],[0,66,0,4,-1],[0,176,0,4,1],[8,113,0,0,1],[8,178,0,0,1],[8,28,0,1,1],[8,107,0,2,1],[4,35,0,1,1],[4,82,0,1,1],[4,143,0,1,1],[4,38,0,4,-1],[4,142,0,4,2],[4,164,0,4,1],[4,70,0,3,1],[4,92,0,3,-1],[4,107,0,3,1],[4,149,0,5,1],[5,38,0,1,1],[5,59,0,1,1],[5,73,0,1,1],[5,113,0,1,1],[5,143,0,1,3],[5,168,0,1,1],[5,11,0,0,2],[5,38,0,0,1],[5,44,0,0,1],[5,100,0,0,1],[5,119,0,0,1],[5,178,0,0,-1],[5,164,0,2,1],[5,28,0,4,1],[5,110,0,6,1],[7,45,0,0,1],[7,82,0,0,1],[7,104,0,0,1],[7,164,0,0,1],[7,35,0,3,1],[7,91,0,3,1],[7,110,0,3,-1],[7,188,0,3,1],[7,191,0,3,1],[7,161,0,5,2],[7,11,0,2,1],[7,37,0,4,1],[7,180,0,4,-1],[6,33,0,1,1],[6,111,0,1,1],[6,131,0,1,1],[6,23,0,4,1],[6,32,0,4,-1],[6,38,0,4,1],[6,59,0,4,1],[6,153,0,4,1],[6,182,0,0,1],[6,11,0,0,-1],[6,108,0,0,1],[6,153,0,0,1],[6,50,0,3,1],[13,3,0,0,1],[13,35,0,0,1],[13,42,0,0,1],[13,68,0,0,2],[13,127,0,0,2],[13,176,0,0,1],[13,31,0,2,1],[13,57,0,2,1],[13,27,0,1,1],[13,45,0,7,1],[12,5,0,0,1],[12,60,0,0,1],[12,68,0,0,2],[12,69,0,0,1],[12,74,0,0,1],[12,95,0,0,1],[12,125,0,0,1],[12,152,0,0,1],[12,161,0,0,1],[12,165,0,0,2],[12,176,0,0,1],[12,63,0,2,1],[12,66,0,2,1],[12,68,0,2,1],[12,99,0,2,1],[12,100,0,2,1],[12,32,0,4,1],[12,59,0,4,1],[12,147,0,1,1],[9,11,0,0,3],[9,24,0,0,1],[9,68,0,0,1],[9,70,0,0,1],[9,125,0,0,-1],[9,149,0,0,1],[9,161,0,0,1],[9,68,0,2,2],[9,100,0,2,1],[9,140,1,8,2],[9,132,0,1,1],[9,35,0,4,1],[10,11,0,0,2],[10,40,0,0,1],[10,49,0,0,1],[10,56,0,0,2],[10,83,0,0,1],[10,99,0,0,2],[10,107,0,0,1],[10,118,0,0,1],[10,166,0,0,1],[10,178,0,0,1],[10,180,0,0,1],[10,11,0,2,4],[10,70,0,2,1],[10,83,0,2,1],[10,139,0,2,1],[10,142,0,2,3],[10,36,0,1,1],[10,45,0,1,1],[10,104,0,1,1],[10,163,0,3,1],[10,122,0,4,1],[3,5,0,1,1],[3,77,0,1,1],[3,81,0,1,1],[3,83,0,1,1],[3,186,0,4,1],[3,66,0,4,2],[3,140,0,4,1],[3,9,0,0,-1],[3,100,0,0,1],[3,113,0,0,1],[3,178,0,0,1],[3,24,0,2,1],[3,51,0,2,1],[3,66,0,5,2],[3,84,0,3,-1],[3,107,0,3,-1],[3,140,0,3,1],[2,9,0,0,1],[2,38,0,0,1],[2,98,0,0,1],[2,100,0,0,1],[2,107,0,0,2],[2,110,0,0,1],[2,163,0,0,1],[2,99,0,4,1],[2,134,0,4,1],[2,146,0,3,1],[2,51,0,2,-1],[1,68,0,0,1],[1,114,0,0,1],[1,136,0,0,1],[1,187,0,3,-1],[1,84,0,3,1],[1,134,0,3,1],[1,156,0,3,1],[1,168,0,3,1],[1,187,0,4,1],[1,108,0,2,1],[14,11,0,1,1],[14,63,0,1,1],[14,169,0,1,1],[14,105,0,3,1],[14,149,0,3,1],[14,68,0,0,1],[14,100,0,0,1],[14,70,0,4,1]]};
+// Banner / store type for the snapshot are derived from the store name (same rules as the upload parser).
+EMBEDDED_DATA.meta = Object.fromEntries(EMBEDDED_DATA.stores.map(n => [n, {
+  banner: ({HN:'Harvey Norman', DM:'Domayne', JM:'Joyce Mayne'})[n.split(' ')[0]] || 'Other',
+  commercial: /\b(COMM|COMMERCIAL|INSURANCE|AVIT|ONLINE)\b/i.test(n)
+}]));
+
+let DATA = EMBEDDED_DATA;
+let dataSource = 'snapshot';
+
+const tooltip = document.getElementById('tooltip');
+const SERIES_COLORS = ['var(--s1)','var(--s2)','var(--s3)','var(--s4)','var(--s5)','var(--s6)'];
+const LS_KEY = 'harveyNormanDashboard.lastStore';
+
+function fmt(n){
+  n = Math.round(n*10)/10;
+  return n % 1 === 0 ? n.toFixed(0) : n.toFixed(1);
+}
+function niceMax(v){
+  if (v <= 0) return 4;
+  const steps = [1,2,4,5,8,10,15,20,25,30,40,50,60,80,100,120,150,200,250,300,400,500];
+  for (const s of steps) if (s >= v) return s;
+  const mag = Math.pow(10, Math.floor(Math.log10(v)));
+  return Math.ceil(v / mag) * mag;
+}
+function showTooltip(evt, container, html){
+  const rect = container.getBoundingClientRect();
+  tooltip.innerHTML = html;
+  tooltip.style.left = (evt.clientX - rect.left) + 'px';
+  tooltip.style.top = (evt.clientY - rect.top) + 'px';
+  tooltip.classList.add('show');
+}
+function hideTooltip(){ tooltip.classList.remove('show'); }
+function saveLastStore(name){ try { localStorage.setItem(LS_KEY, name); } catch(e){} }
+function loadLastStore(){ try { return localStorage.getItem(LS_KEY); } catch(e){ return null; } }
+
+/* ============ Live data loading (Supabase, with graceful fallback) ============ */
+async function fetchAllRows(client, table, cols, orderCol){
+  // PostgREST returns at most 1000 rows per request, so page through everything.
+  const out = []; const page = 1000;
+  for (let from = 0; ; from += page){
+    const { data, error } = await client.from(table).select(cols).order(orderCol, { ascending:true }).range(from, from + page - 1);
+    if (error) throw new Error(error.message || ('Could not read ' + table));
+    out.push(...(data || []));
+    if (!data || data.length < page) break;
+  }
+  return out;
+}
+async function tryLoadLive(){
+  if (!SUPABASE_ANON_KEY || SUPABASE_ANON_KEY.indexOf('REPLACE') === 0) return null;
+  if (typeof supabase === 'undefined') return null;
+  try {
+    const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const [records, storeList, weekList] = await Promise.all([
+      fetchAllRows(client, SUPABASE_TABLE, 'id,report_date,store,banner,brand,item_code,description,sold_qty', 'id'),
+      fetchAllRows(client, STORES_TABLE, 'store_raw,store,banner,is_commercial', 'store_raw'),
+      fetchAllRows(client, WEEKS_TABLE, 'report_date', 'report_date')
+    ]);
+    if (!weekList.length && !records.length) return null;
+    return transformLiveRows(records, storeList, weekList);
+  } catch (e){
+    console.warn('Live load failed:', e);
+    return null;
+  }
+}
+function weekLabelOf(w){
+  const d = new Date(w+'T00:00:00');
+  return d.toLocaleDateString('en-AU',{day:'2-digit',month:'short'});
+}
+function transformLiveRows(records, storeList, weekList){
+  const weeks = [...new Set(weekList.map(w=>w.report_date).concat(records.map(r=>r.report_date)))].sort();
+  const weekLabels = weeks.map(weekLabelOf);
+  const meta = {};
+  storeList.forEach(s => { meta[s.store] = { banner: s.banner, commercial: !!s.is_commercial }; });
+  records.forEach(r => { if (!meta[r.store]) meta[r.store] = { banner: r.banner || 'Harvey Norman', commercial: false }; });
+  const stores = Object.keys(meta).sort();
+  const brands = [...new Set(records.map(r=>r.brand))].sort();
+  const prodMap = new Map();
+  records.forEach(r=>{
+    const key = r.item_code+'|'+r.description+'|'+r.brand;
+    if (!prodMap.has(key)) prodMap.set(key, {item:r.item_code, desc:r.description, brand:r.brand});
+  });
+  const products = [...prodMap.values()].sort((a,b)=>a.item.localeCompare(b.item));
+  const weekIdx = {}; weeks.forEach((w,i)=>weekIdx[w]=i);
+  const storeIdx = {}; stores.forEach((s,i)=>storeIdx[s]=i);
+  const brandIdx = {}; brands.forEach((b,i)=>brandIdx[b]=i);
+  const prodIdx = new Map(); products.forEach((p,i)=>prodIdx.set(p.item+'|'+p.desc+'|'+p.brand, i));
+  const rows = records.map(r=>[
+    weekIdx[r.report_date], storeIdx[r.store], brandIdx[r.brand],
+    prodIdx.get(r.item_code+'|'+r.description+'|'+r.brand),
+    Number(r.sold_qty)
+  ]);
+  return { weeks, weekLabels, stores, brands, products, rows, meta };
+}
+
+/* ============ Banner / store-type visibility ============ */
+const BANNER_ORDER = ['Harvey Norman','Domayne','Joyce Mayne','Other'];
+function storeMeta(name){ return (DATA.meta && DATA.meta[name]) || { banner:'Harvey Norman', commercial:false }; }
+function allBanners(){
+  const present = new Set(DATA.stores.map(s => storeMeta(s).banner));
+  return BANNER_ORDER.filter(b => present.has(b)).concat([...present].filter(b => !BANNER_ORDER.includes(b)).sort());
+}
+function storeVisible(name){
+  const m = storeMeta(name);
+  return state.banners.has(m.banner) && (state.includeCommercial || !m.commercial);
+}
+function visibleStores(){ return DATA.stores.filter(storeVisible); }
+function commTag(name){ return storeMeta(name).commercial ? '<span class="tag-comm">NON-RETAIL</span>' : ''; }
+
+/* ============ FILTER STATE ============ */
+const state = {
+  weekStart: 0, weekEnd: 0, rangeMode: 'all',
+  brands: new Set(), products: new Set(),
+  tab: 'detail', selectedStore: null, compareStores: [],
+  unitMode: 'net', includeCommercial: false, storeRank: 'top', banners: new Set()
+};
+function resetStateDefaults(){
+  state.weekStart = 0; state.weekEnd = DATA.weeks.length - 1; state.rangeMode = 'all';
+  state.brands = new Set(DATA.brands);
+  state.products = new Set(DATA.products.map((_, i) => i));
+  state.unitMode = 'net'; state.includeCommercial = false; state.storeRank = 'top';
+  state.banners = new Set(allBanners());
+}
+
+function activeRows(){
+  return DATA.rows.filter(([w,s,b,p,q]) =>
+    w >= state.weekStart && w <= state.weekEnd &&
+    state.brands.has(DATA.brands[b]) &&
+    state.products.has(p) &&
+    storeVisible(DATA.stores[s])
+  );
+}
+
+function aggregate(rows){
+  const activeWeeks = DATA.weeks.slice(state.weekStart, state.weekEnd + 1);
+  const activeLabels = DATA.weekLabels.slice(state.weekStart, state.weekEnd + 1);
+  const n = activeWeeks.length;
+  const weekTotals = new Array(n).fill(0);
+  const storeTotal = {}, storeWeek = {}, storeProduct = {};
+  DATA.stores.forEach(s => { storeTotal[s] = 0; storeWeek[s] = new Array(n).fill(0); storeProduct[s] = new Map(); });
+  let grand = 0, returns = 0;
+  rows.forEach(([w,s,b,p,q]) => {
+    if (q < 0) returns += -q;
+    const useQ = state.unitMode === 'gross' ? Math.max(q, 0) : q;
+    if (useQ === 0) return;
+    const wi = w - state.weekStart;
+    const storeName = DATA.stores[s];
+    weekTotals[wi] += useQ;
+    storeTotal[storeName] += useQ;
+    storeWeek[storeName][wi] += useQ;
+    storeProduct[storeName].set(p, (storeProduct[storeName].get(p) || 0) + useQ);
+    grand += useQ;
+  });
+  return { activeWeeks, activeLabels, weekTotals, storeTotal, storeWeek, storeProduct, grand, n, returns };
+}
+
+/* Trend/dormancy uses the FULL week history (ignoring the Weeks filter, respecting brand/product/unit filters)
+   so a store's "recent momentum" reads the same whether or not someone has narrowed the date range for other reasons. */
+function computeTrends(){
+  const rows = DATA.rows.filter(([w,s,b,p,q]) => state.brands.has(DATA.brands[b]) && state.products.has(p));
+  const n = DATA.weeks.length;
+  const storeWeekFull = {};
+  DATA.stores.forEach(s => { storeWeekFull[s] = new Array(n).fill(0); });
+  rows.forEach(([w,s,b,p,q]) => {
+    const useQ = state.unitMode === 'gross' ? Math.max(q, 0) : q;
+    storeWeekFull[DATA.stores[s]][w] += useQ;
+  });
+  const win = n >= 2 ? Math.max(1, Math.min(3, Math.floor(n / 2))) : 0;
+  const trends = {};
+  DATA.stores.forEach(s => {
+    const weekly = storeWeekFull[s];
+    const total = weekly.reduce((a,b)=>a+b,0);
+    if (win === 0){ trends[s] = { pct:null, dormant:false, isNew:false }; return; }
+    const recent = weekly.slice(n - win);
+    const prior = weekly.slice(Math.max(0, n - 2*win), n - win);
+    const recentSum = recent.reduce((a,b)=>a+b,0);
+    const priorSum = prior.reduce((a,b)=>a+b,0);
+    const dormant = total > 0 && recentSum === 0;
+    let pct = null, isNew = false;
+    if (priorSum > 0) pct = ((recentSum - priorSum) / priorSum) * 100;
+    else if (recentSum > 0) isNew = true;
+    trends[s] = { pct, dormant, isNew, win };
+  });
+  return trends;
+}
+function trendBadgeHtml(t){
+  if (!t) return '';
+  if (t.dormant) return `<span class="trend flag">Needs Attention</span>`;
+  if (t.isNew) return `<span class="trend new">New</span>`;
+  if (t.pct === null) return '';
+  if (Math.abs(t.pct) < 3) return `<span class="trend flat">&#8213; Flat</span>`;
+  const dir = t.pct > 0 ? 'up' : 'down';
+  const arrow = t.pct > 0 ? '&#9650;' : '&#9660;';
+  return `<span class="trend ${dir}">${arrow} ${Math.abs(Math.round(t.pct))}%</span>`;
+}
+
+/* ============ BAR CHART ============ */
+function renderBarChart(container, values, labels){
+  if (values.every(v => v === 0)){
+    container.innerHTML = '<div class="empty-state">No units match the current filters</div>';
+    return;
+  }
+  const W = 900, H = 220;
+  const padL = 34, padR = 10, padT = 18, padB = 26;
+  const plotW = W - padL - padR, plotH = H - padT - padB;
+  const n = values.length;
+  const max = niceMax(Math.max(...values, 1));
+  const band = plotW / n;
+  const barW = Math.min(26, band * 0.5);
+  const ticks = 4;
+
+  let svg = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Weekly units bar chart">`;
+  for (let i=0;i<=ticks;i++){
+    const val = (max/ticks)*i;
+    const y = padT + plotH - (val/max)*plotH;
+    svg += `<line class="gridline" x1="${padL}" x2="${W-padR}" y1="${y.toFixed(1)}" y2="${y.toFixed(1)}"/>`;
+    svg += `<text class="axis-label" x="${padL-8}" y="${(y+3).toFixed(1)}" text-anchor="end">${Math.round(val)}</text>`;
+  }
+  const maxIdx = values.indexOf(Math.max(...values));
+  values.forEach((v,i)=>{
+    const x = padL + band*i + (band-barW)/2;
+    const h = max>0 ? (v/max)*plotH : 0;
+    const cls = v>0 ? 'bar' : 'bar zero';
+    const barH = Math.max(h, v>0 ? 2 : 1.5);
+    const barY = padT + plotH - barH;
+    svg += `<rect class="${cls}" data-i="${i}" x="${x.toFixed(1)}" y="${barY.toFixed(1)}" width="${barW.toFixed(1)}" height="${barH.toFixed(1)}" rx="4" ry="4"/>`;
+    if (i===maxIdx && v>0){
+      svg += `<text class="value-label" x="${(x+barW/2).toFixed(1)}" y="${(barY-6).toFixed(1)}" text-anchor="middle">${fmt(v)}</text>`;
+    }
+    // Label every week while they fit (~52 units of width each); otherwise thin
+    // evenly, anchored on the latest week so it is always labelled.
+    const showEvery = Math.max(1, Math.ceil(52 / band));
+    if ((n-1-i) % showEvery === 0){
+      svg += `<text class="axis-label" x="${(x+barW/2).toFixed(1)}" y="${H-8}" text-anchor="middle">${labels[i]}</text>`;
+    }
+  });
+  svg += `<line class="baseline" x1="${padL}" x2="${W-padR}" y1="${(padT+plotH).toFixed(1)}" y2="${(padT+plotH).toFixed(1)}"/>`;
+  svg += `</svg>`;
+  container.innerHTML = svg;
+  container.querySelectorAll('.bar').forEach(bar=>{
+    bar.addEventListener('mousemove', (evt)=>{
+      const i = +bar.getAttribute('data-i');
+      showTooltip(evt, container, `${labels[i]}<span class="sub">${fmt(values[i])} unit${values[i]==1?'':'s'}</span>`);
+    });
+    bar.addEventListener('mouseleave', hideTooltip);
+  });
+}
+
+/* ============ LINE CHART (compare) ============ */
+function renderLineChart(container, series, labels){
+  if (series.length === 0){
+    container.innerHTML = '<div class="compare-empty">Add stores above to compare their weekly history</div>';
+    return;
+  }
+  const allVals = series.flatMap(s=>s.values);
+  if (allVals.every(v=>v===0)){
+    container.innerHTML = '<div class="empty-state">No units match the current filters for these stores</div>';
+    return;
+  }
+  const W = 900, H = 260;
+  const padL = 34, padR = 16, padT = 18, padB = 26;
+  const plotW = W - padL - padR, plotH = H - padT - padB;
+  const n = labels.length;
+  const max = niceMax(Math.max(...allVals, 1));
+  const ticks = 4;
+  const xAt = i => padL + (n===1 ? plotW/2 : (plotW/(n-1))*i);
+  const yAt = v => padT + plotH - (v/max)*plotH;
+
+  let svg = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Store comparison line chart">`;
+  for (let i=0;i<=ticks;i++){
+    const val = (max/ticks)*i;
+    const y = yAt(val);
+    svg += `<line class="gridline" x1="${padL}" x2="${W-padR}" y1="${y.toFixed(1)}" y2="${y.toFixed(1)}"/>`;
+    svg += `<text class="axis-label" x="${padL-8}" y="${(y+3).toFixed(1)}" text-anchor="end">${Math.round(val)}</text>`;
+  }
+  const showEvery = n > 1 ? Math.max(1, Math.ceil(52 / (plotW/(n-1)))) : 1;
+  labels.forEach((lb,i)=>{
+    if ((n-1-i) % showEvery === 0){
+      svg += `<text class="axis-label" x="${xAt(i).toFixed(1)}" y="${H-8}" text-anchor="middle">${lb}</text>`;
+    }
+  });
+  svg += `<line class="baseline" x1="${padL}" x2="${W-padR}" y1="${(padT+plotH).toFixed(1)}" y2="${(padT+plotH).toFixed(1)}"/>`;
+
+  series.forEach((s,si)=>{
+    const color = SERIES_COLORS[si % SERIES_COLORS.length];
+    let d = '';
+    s.values.forEach((v,i)=>{
+      const x = xAt(i), y = yAt(v);
+      d += (i===0?'M':'L') + x.toFixed(1) + ' ' + y.toFixed(1) + ' ';
+    });
+    svg += `<path class="line-path" d="${d}" stroke="${color}"/>`;
+    s.values.forEach((v,i)=>{
+      const x = xAt(i), y = yAt(v);
+      svg += `<circle class="line-dot" data-si="${si}" data-i="${i}" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="4" fill="${color}" stroke="var(--surface)" stroke-width="2"/>`;
+    });
+  });
+  svg += `</svg>`;
+  container.innerHTML = svg;
+  container.querySelectorAll('.line-dot').forEach(dot=>{
+    dot.addEventListener('mousemove', (evt)=>{
+      const si = +dot.getAttribute('data-si'), i = +dot.getAttribute('data-i');
+      const s = series[si];
+      showTooltip(evt, container, `${s.name} &middot; ${labels[i]}<span class="sub">${fmt(s.values[i])} unit${s.values[i]==1?'':'s'}</span>`);
+    });
+    dot.addEventListener('mouseleave', hideTooltip);
+  });
+}
+
+/* ============ FILTER BAR: brand pills ============ */
+function renderBrandPills(){
+  const el = document.getElementById('brandPills');
+  el.innerHTML = DATA.brands.map(b=>`<button class="pill" data-brand="${b}">${b}</button>`).join('');
+}
+function syncBrandPills(){
+  const allBtn = document.querySelector('[data-brand="__all__"]');
+  const isAll = state.brands.size === DATA.brands.length;
+  allBtn.classList.toggle('active', isAll);
+  document.querySelectorAll('#brandPills .pill').forEach(btn=>{
+    btn.classList.toggle('active', !isAll && state.brands.has(btn.getAttribute('data-brand')));
+  });
+}
+function wireBrandPills(){
+  document.querySelector('[data-brand="__all__"]').addEventListener('click', ()=>{
+    state.brands = new Set(DATA.brands);
+    syncBrandPills(); renderAll();
+  });
+  document.getElementById('brandPills').addEventListener('click', (evt)=>{
+    const btn = evt.target.closest('.pill');
+    if (!btn) return;
+    const b = btn.getAttribute('data-brand');
+    if (state.brands.size === DATA.brands.length){
+      state.brands = new Set([b]);
+    } else if (state.brands.has(b)){
+      state.brands.delete(b);
+      if (state.brands.size === 0) state.brands = new Set(DATA.brands);
+    } else {
+      state.brands.add(b);
+    }
+    syncBrandPills(); renderAll();
+  });
+}
+
+/* ============ FILTER BAR: banner pills ============ */
+function renderBannerPills(){
+  document.getElementById('bannerPills').innerHTML = allBanners().map(b=>`<button class="pill" data-banner="${b}">${b}</button>`).join('');
+}
+function syncBannerPills(){
+  const all = allBanners();
+  const isAll = state.banners.size === all.length;
+  document.querySelector('[data-banner="__all__"]').classList.toggle('active', isAll);
+  document.querySelectorAll('#bannerPills .pill').forEach(btn=>{
+    btn.classList.toggle('active', !isAll && state.banners.has(btn.getAttribute('data-banner')));
+  });
+}
+function wireBannerPills(){
+  document.querySelector('[data-banner="__all__"]').addEventListener('click', ()=>{
+    state.banners = new Set(allBanners()); syncBannerPills(); renderAll();
+  });
+  document.getElementById('bannerPills').addEventListener('click', (evt)=>{
+    const btn = evt.target.closest('.pill'); if (!btn) return;
+    const b = btn.getAttribute('data-banner'); const all = allBanners();
+    if (state.banners.size === all.length) state.banners = new Set([b]);
+    else if (state.banners.has(b)){ state.banners.delete(b); if (state.banners.size === 0) state.banners = new Set(all); }
+    else state.banners.add(b);
+    syncBannerPills(); renderAll();
+  });
+}
+
+/* ============ FILTER BAR: product dropdown ============ */
+function renderProductList(filterText){
+  const listEl = document.getElementById('productList');
+  const ft = (filterText||'').toLowerCase();
+  const items = DATA.products.map((p,i)=>({...p,i})).filter(p =>
+    !ft || p.item.toLowerCase().includes(ft) || p.desc.toLowerCase().includes(ft)
+  );
+  listEl.innerHTML = items.map(p => `
+    <label class="chk-row">
+      <input type="checkbox" data-pi="${p.i}" ${state.products.has(p.i) ? 'checked' : ''}>
+      <span><span class="ci-item">${p.item}</span><span class="ci-desc">${p.desc}</span></span>
+    </label>
+  `).join('') || '<div style="padding:10px;color:var(--text-muted);font-size:12px;">No matches</div>';
+  listEl.querySelectorAll('input[type="checkbox"]').forEach(cb=>{
+    cb.addEventListener('change', ()=>{
+      const i = +cb.getAttribute('data-pi');
+      if (cb.checked) state.products.add(i); else state.products.delete(i);
+      syncProductBtn(); renderAll();
+    });
+  });
+}
+function syncProductBtn(){
+  const btn = document.getElementById('productBtn');
+  const isAll = state.products.size === DATA.products.length;
+  btn.innerHTML = (isAll ? 'All Products' : state.products.size + ' Product' + (state.products.size===1?'':'s') + ' Selected') + ' <span style="opacity:.6;">&#9662;</span>';
+  btn.classList.toggle('active', !isAll);
+}
+function wireProductDropdown(){
+  const btn = document.getElementById('productBtn');
+  const panel = document.getElementById('productPanel');
+  btn.addEventListener('click', (e)=>{ e.stopPropagation(); panel.classList.toggle('show'); });
+  document.addEventListener('click', (e)=>{ if (!document.getElementById('productDropdown').contains(e.target)) panel.classList.remove('show'); });
+  document.getElementById('productSearch').addEventListener('input', (e)=> renderProductList(e.target.value));
+  document.getElementById('productAll').addEventListener('click', ()=>{
+    state.products = new Set(DATA.products.map((_,i)=>i));
+    renderProductList(document.getElementById('productSearch').value); syncProductBtn(); renderAll();
+  });
+  document.getElementById('productNone').addEventListener('click', ()=>{
+    state.products = new Set();
+    renderProductList(document.getElementById('productSearch').value);
+    syncProductBtn();
+    renderAll();
+  });
+  renderProductList('');
+}
+
+/* ============ FILTER BAR: unit mode + channel toggle ============ */
+function wireUnitToggle(){
+  document.getElementById('segUnits').addEventListener('click', (evt)=>{
+    const btn = evt.target.closest('button');
+    if (!btn) return;
+    document.querySelectorAll('#segUnits button').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    state.unitMode = btn.getAttribute('data-unit');
+    renderAll();
+  });
+}
+function wireChannelToggle(){
+  document.getElementById('segChannel').addEventListener('click', (evt)=>{
+    const btn = evt.target.closest('button');
+    if (!btn) return;
+    document.querySelectorAll('#segChannel button').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    state.includeCommercial = btn.getAttribute('data-channel') === 'all';
+    renderAll();
+  });
+}
+function wireStoreRankToggle(){
+  document.getElementById('segStoreRank').addEventListener('click', (evt)=>{
+    const btn = evt.target.closest('button');
+    if (!btn) return;
+    document.querySelectorAll('#segStoreRank button').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    state.storeRank = btn.getAttribute('data-rank');
+    renderAll();
+  });
+}
+
+/* ============ FILTER BAR: week range ============ */
+function wireWeekRange(){
+  const fromSel = document.getElementById('fromWeek');
+  const toSel = document.getElementById('toWeek');
+  fromSel.innerHTML = DATA.weekLabels.map((l,i)=>`<option value="${i}">${l}</option>`).join('');
+  toSel.innerHTML = DATA.weekLabels.map((l,i)=>`<option value="${i}">${l}</option>`).join('');
+  toSel.value = DATA.weeks.length - 1;
+
+  document.getElementById('segRange').addEventListener('click', (evt)=>{
+    const btn = evt.target.closest('button');
+    if (!btn) return;
+    document.querySelectorAll('#segRange button').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    const mode = btn.getAttribute('data-range');
+    state.rangeMode = mode;
+    const rc = document.getElementById('rangeCustom');
+    if (mode === 'all'){ state.weekStart = 0; state.weekEnd = DATA.weeks.length-1; rc.classList.remove('show'); }
+    else if (mode === '4'){ state.weekEnd = DATA.weeks.length-1; state.weekStart = Math.max(0, state.weekEnd-3); rc.classList.remove('show'); }
+    else if (mode === '8'){ state.weekEnd = DATA.weeks.length-1; state.weekStart = Math.max(0, state.weekEnd-7); rc.classList.remove('show'); }
+    else if (mode === 'custom'){ rc.classList.add('show'); fromSel.value = state.weekStart; toSel.value = state.weekEnd; }
+    renderAll();
+  });
+
+  fromSel.addEventListener('change', ()=>{
+    let f = +fromSel.value, t = +toSel.value;
+    if (f > t) { t = f; toSel.value = t; }
+    state.weekStart = f; state.weekEnd = t;
+    renderAll();
+  });
+  toSel.addEventListener('change', ()=>{
+    let f = +fromSel.value, t = +toSel.value;
+    if (t < f) { f = t; fromSel.value = f; }
+    state.weekStart = f; state.weekEnd = t;
+    renderAll();
+  });
+}
+
+function resetFilters(){
+  resetStateDefaults();
+  document.querySelectorAll('#segRange button').forEach(b=>b.classList.toggle('active', b.getAttribute('data-range')==='all'));
+  document.getElementById('rangeCustom').classList.remove('show');
+  document.querySelectorAll('#segUnits button').forEach(b=>b.classList.toggle('active', b.getAttribute('data-unit')==='net'));
+  document.querySelectorAll('#segChannel button').forEach(b=>b.classList.toggle('active', b.getAttribute('data-channel')==='stores'));
+  document.querySelectorAll('#segStoreRank button').forEach(b=>b.classList.toggle('active', b.getAttribute('data-rank')==='top'));
+  syncBrandPills(); syncBannerPills();
+  renderProductList(''); syncProductBtn();
+  document.getElementById('productSearch').value = '';
+  renderAll();
+}
+
+/* ============ Filter summary + CSV/print ============ */
+function renderFilterSummary(agg){
+  const el = document.getElementById('filterSummary');
+  const wk = agg.activeLabels.length === DATA.weeks.length ? `All ${DATA.weeks.length} weeks` : `${agg.activeLabels[0]}–${agg.activeLabels[agg.activeLabels.length-1]} (${agg.activeLabels.length} wk${agg.activeLabels.length===1?'':'s'})`;
+  const brandTxt = state.brands.size === DATA.brands.length ? 'all brands' : [...state.brands].join(', ');
+  const prodTxt = state.products.size === DATA.products.length ? 'all products' : state.products.size + ' product' + (state.products.size===1?'':'s');
+  const bannerTxt = state.banners.size === allBanners().length ? 'all banners' : [...state.banners].join(', ');
+  const typeTxt = state.includeCommercial ? 'incl. commercial & online' : 'retail stores';
+  const unitTxt = state.unitMode === 'gross' ? 'gross units (before returns)' : 'net units (after returns)';
+  el.innerHTML = `Showing <b>${wk}</b> &middot; <b>${bannerTxt}</b> (${typeTxt}) &middot; <b>${brandTxt}</b> &middot; <b>${prodTxt}</b> &middot; <b>${unitTxt}</b> &middot; <b>${fmt(agg.grand)}</b> units total`;
+}
+
+function exportCsv(){
+  const rows = activeRows();
+  let csv = 'Week Ending,Banner,Store,Brand,Item Code,Description,Units Sold\n';
+  rows.forEach(([w,s,b,p,q])=>{
+    const prod = DATA.products[p];
+    const line = [DATA.weeks[w], storeMeta(DATA.stores[s]).banner, DATA.stores[s], DATA.brands[b], prod.item, prod.desc, q]
+      .map(v => typeof v === 'string' && (v.includes(',') || v.includes('"')) ? '"'+v.replace(/"/g,'""')+'"' : v)
+      .join(',');
+    csv += line + '\n';
+  });
+  const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'harvey-norman-sales-filtered.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+/* ============ KPI strip ============ */
+function renderKpis(agg){
+  const el = document.getElementById('kpiStrip');
+  const ranked = Object.entries(agg.storeTotal)
+    .filter(([name,t]) => t > 0 && storeVisible(name))
+    .sort((a,b)=>b[1]-a[1]);
+  const topStore = ranked[0] || ['—', 0];
+  const unitLabel = state.unitMode === 'gross' ? 'Gross Units' : 'Total Units';
+  el.innerHTML = `
+    <div class="kpi"><p class="label">${unitLabel}</p><p class="value">${fmt(agg.grand)}</p><p class="sub">across ${agg.n} week${agg.n===1?'':'s'}</p></div>
+    <div class="kpi"><p class="label">Stores With Sales</p><p class="value">${ranked.length}</p><p class="sub">of ${visibleStores().length} stores in view</p></div>
+    <div class="kpi"><p class="label">Weekly Avg</p><p class="value">${fmt(agg.grand/agg.n)}</p><p class="sub">units / week, filtered</p></div>
+    <div class="kpi"><p class="label">Top Store</p><p class="value" title="${topStore[0]}">${topStore[0]}</p><p class="sub">${fmt(topStore[1])} units</p></div>
+    <div class="kpi"><p class="label">Returns</p><p class="value">${fmt(agg.returns)}</p><p class="sub">units returned, this period</p></div>
+  `;
+  const from = DATA.weekLabels[0], to = DATA.weekLabels[DATA.weekLabels.length-1];
+  document.getElementById('dateRangeText').textContent = `Weekly Unit Sales By Store · Week Ending ${from} – ${to} · ${DATA.weeks.length} Weekly Reports`;
+}
+
+/* ============ Leaderboard ============ */
+function renderBoard(agg, trends){
+  const el = document.getElementById('board');
+  const weakest = state.storeRank === 'weakest';
+  document.getElementById('rankTitle').textContent = weakest ? 'Weakest Stores' : 'Top Stores';
+  const ranked = Object.entries(agg.storeTotal)
+    .filter(([name,t]) => t > 0 && storeVisible(name))
+    .sort((a,b)=> weakest ? (a[1]-b[1] || a[0].localeCompare(b[0])) : (b[1]-a[1] || a[0].localeCompare(b[0])))
+    .slice(0, 24);
+  if (ranked.length === 0){ el.innerHTML = '<div class="empty-state">No stores match the current filters</div>'; return; }
+  // Fill down the left column first (1-12), then the right (13-24)
+  el.style.setProperty('--board-rows', Math.ceil(ranked.length / 2));
+  const max = Math.max(...ranked.map(r=>r[1]));
+  el.innerHTML = ranked.map(([name,total],i)=>{
+    const t = trends[name];
+    return `
+    <div class="board-row${state.selectedStore===name && state.tab==='detail' ? ' active':''}" data-name="${name}">
+      <span class="board-rank">${i+1}</span>
+      <div class="board-main">
+        <div class="board-name" title="${name}">${name}${commTag(name)}</div>
+        <div class="board-track"><div class="board-fill" style="width:${(max>0?total/max*100:0).toFixed(1)}%"></div></div>
+      </div>
+      <div class="board-right">
+        <span class="board-value">${fmt(total)}</span>
+        ${t ? trendBadgeHtml(t) : ''}
+      </div>
+    </div>
+  `;}).join('');
+  el.querySelectorAll('.board-row').forEach(row=>{
+    row.addEventListener('click', ()=>{
+      setTab('detail');
+      selectStore(row.getAttribute('data-name'), agg);
+    });
+  });
+}
+
+/* ============ No Movement (stores with zero units in the current selection) ============ */
+function computeLastSaleIdx(){
+  const rows = DATA.rows.filter(([w,s,b,p,q]) => state.brands.has(DATA.brands[b]) && state.products.has(p));
+  const lastSaleIdx = {};
+  DATA.stores.forEach(s => { lastSaleIdx[s] = -1; });
+  rows.forEach(([w,s,b,p,q]) => {
+    const useQ = state.unitMode === 'gross' ? Math.max(q, 0) : q;
+    if (useQ <= 0) return;
+    const name = DATA.stores[s];
+    if (w > lastSaleIdx[name]) lastSaleIdx[name] = w;
+  });
+  return lastSaleIdx;
+}
+function renderNoMovement(agg){
+  const el = document.getElementById('noMoveBoard');
+  const countEl = document.getElementById('noMoveCount');
+  const lastSaleIdx = computeLastSaleIdx();
+  const totalWeeks = DATA.weeks.length;
+  const candidates = DATA.stores.filter(name => (agg.storeTotal[name] || 0) <= 0 && storeVisible(name));
+  countEl.textContent = candidates.length ? ` (${candidates.length})` : '';
+  if (candidates.length === 0){
+    el.innerHTML = '<div class="empty-state">Every store in this selection sold at least one unit &mdash; nice.</div>';
+    return;
+  }
+  const withStaleness = candidates.map(name => {
+    const lastIdx = lastSaleIdx[name];
+    const weeksSince = lastIdx >= 0 ? (totalWeeks - 1 - lastIdx) : null;
+    return { name, lastIdx, weeksSince };
+  }).sort((a,b) => {
+    if (a.lastIdx === -1 && b.lastIdx === -1) return a.name.localeCompare(b.name);
+    if (a.lastIdx === -1) return -1;
+    if (b.lastIdx === -1) return 1;
+    return a.lastIdx - b.lastIdx || a.name.localeCompare(b.name);
+  }).slice(0, 24);
+  const maxWeeksSince = Math.max(1, ...withStaleness.map(r => r.weeksSince == null ? totalWeeks : r.weeksSince));
+  el.style.setProperty('--board-rows', Math.max(1, Math.ceil(withStaleness.length / 2)));
+  el.innerHTML = withStaleness.map((r,i) => {
+    const label = r.lastIdx === -1
+      ? 'No Sales On Record'
+      : (r.weeksSince === 0 ? 'Last Sale This Week' : `Last Sale ${r.weeksSince} Wk${r.weeksSince===1?'':'s'} Ago`);
+    const fillPct = r.lastIdx === -1 ? 100 : Math.min(100, (r.weeksSince / maxWeeksSince) * 100);
+    return `
+    <div class="board-row" data-name="${r.name}">
+      <span class="board-rank">${i+1}</span>
+      <div class="board-main">
+        <div class="board-name" title="${r.name}">${r.name}${commTag(r.name)}</div>
+        <div class="board-track"><div class="board-fill" style="width:${fillPct.toFixed(1)}%;background:var(--critical);"></div></div>
+      </div>
+      <div class="board-right">
+        <span class="board-value" style="font-size:12px;font-weight:600;">${label}</span>
+      </div>
+    </div>`;
+  }).join('');
+  el.querySelectorAll('.board-row').forEach(row=>{
+    row.addEventListener('click', ()=>{
+      setTab('detail');
+      selectStore(row.getAttribute('data-name'), agg);
+    });
+  });
+}
+
+/* ============ Store select ============ */
+function renderSelect(agg){
+  const sel = document.getElementById('storeSelect');
+  const alpha = visibleStores().sort((a,b)=>a.localeCompare(b));
+  if (state.selectedStore && !alpha.includes(state.selectedStore)) alpha.unshift(state.selectedStore);
+  const cur = sel.value;
+  sel.innerHTML = alpha.map(s=>{
+    const label = storeMeta(s).commercial ? `${s} (Commercial / Online)` : s;
+    return `<option value="${s}">${label} — ${fmt(agg.storeTotal[s]||0)} units</option>`;
+  }).join('');
+  if (state.selectedStore && alpha.includes(state.selectedStore)) sel.value = state.selectedStore;
+  else if (cur && alpha.includes(cur)) sel.value = cur;
+}
+
+function selectStore(name, agg){
+  state.selectedStore = name;
+  saveLastStore(name);
+  document.getElementById('storeSelect').value = name;
+  document.querySelectorAll('.board-row').forEach(r=>r.classList.toggle('active', r.getAttribute('data-name')===name && state.tab==='detail'));
+  renderStoreDetail(agg);
+}
+
+function renderStoreDetail(agg){
+  const name = state.selectedStore;
+  if (!name) return;
+  const total = agg.storeTotal[name] || 0;
+  const weekly = agg.storeWeek[name] || new Array(agg.n).fill(0);
+  const weeksActive = weekly.filter(v=>v>0).length;
+  const avgActive = weeksActive ? total/weeksActive : 0;
+  const maxIdx = weekly.indexOf(Math.max(...weekly));
+  const bestLabel = weekly[maxIdx] > 0 ? agg.activeLabels[maxIdx] : '—';
+  const t = lastTrends[name];
+  const trendHtml = t ? (trendBadgeHtml(t) || '<span class="trend flat">No Prior Data</span>') : '<span class="trend flat">No Prior Data</span>';
+
+  document.getElementById('storeKpis').innerHTML = `
+    <div class="mini-kpi"><p class="label">Total Units</p><p class="value">${fmt(total)}</p></div>
+    <div class="mini-kpi"><p class="label">Active Weeks</p><p class="value">${weeksActive} / ${agg.n}</p></div>
+    <div class="mini-kpi"><p class="label">Avg / Active Week</p><p class="value">${fmt(avgActive)}</p></div>
+    <div class="mini-kpi"><p class="label">Best Week</p><p class="value">${fmt(weekly[maxIdx]||0)} <span style="font-size:11px;font-weight:500;color:var(--text-muted);">(${bestLabel})</span></p></div>
+    <div class="mini-kpi"><p class="label">Recent Trend</p><p class="value small">${trendHtml}</p></div>
+  `;
+  renderBarChart(document.getElementById('storeChart'), weekly, agg.activeLabels);
+
+  // Store Detail always shows the chosen store, even if the Banner / Store Type filters would hide it.
+  const prodMap = agg.storeProduct[name] || new Map();
+  const entries = [...prodMap.entries()].map(([pi,qty])=>({...DATA.products[pi], qty})).sort((a,b)=>b.qty-a.qty);
+  const tbody = document.getElementById('productTable');
+  tbody.innerHTML = entries.length === 0
+    ? `<tr><td colspan="4" style="text-align:center;color:var(--text-muted);">No product lines match the current filters</td></tr>`
+    : entries.map(p=>`<tr><td class="item">${p.item}</td><td class="desc">${p.desc}</td><td class="brand">${p.brand}</td><td class="num">${fmt(p.qty)}</td></tr>`).join('');
+}
+
+/* ============ Compare tab ============ */
+function renderCompareChips(){
+  const el = document.getElementById('compareChips');
+  el.innerHTML = state.compareStores.map((name,i)=>`
+    <span class="chip"><span class="sw" style="background:${SERIES_COLORS[i%SERIES_COLORS.length]}"></span>${name}<button data-name="${name}" aria-label="Remove">&times;</button></span>
+  `).join('');
+  el.querySelectorAll('button').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      state.compareStores = state.compareStores.filter(n=>n!==btn.getAttribute('data-name'));
+      renderCompareChips(); renderCompareTab(lastAgg);
+    });
+  });
+}
+function renderStoreAddList(filterText){
+  const listEl = document.getElementById('storeAddList');
+  const ft = (filterText||'').toLowerCase();
+  const opts = visibleStores().filter(s => !state.compareStores.includes(s) && (!ft || s.toLowerCase().includes(ft)));
+  listEl.innerHTML = opts.length ? opts.map(s=>`<div class="chk-row" data-name="${s}"><span class="ci-item">${s}${commTag(s)}</span></div>`).join('')
+    : '<div style="padding:10px;color:var(--text-muted);font-size:12px;">No matches</div>';
+  listEl.querySelectorAll('.chk-row').forEach(row=>{
+    row.addEventListener('click', ()=>{
+      if (state.compareStores.length >= 6) return;
+      state.compareStores.push(row.getAttribute('data-name'));
+      renderCompareChips(); renderStoreAddList(document.getElementById('storeAddSearch').value);
+      renderCompareTab(lastAgg);
+      document.getElementById('storeAddPanel').classList.remove('show');
+    });
+  });
+}
+function wireCompareAdd(){
+  const btn = document.getElementById('storeAddBtn');
+  const panel = document.getElementById('storeAddPanel');
+  btn.addEventListener('click', (e)=>{ e.stopPropagation(); renderStoreAddList(''); panel.classList.toggle('show'); });
+  document.addEventListener('click', (e)=>{ if (!document.getElementById('storeAddDropdown').contains(e.target)) panel.classList.remove('show'); });
+  document.getElementById('storeAddSearch').addEventListener('input', (e)=>renderStoreAddList(e.target.value));
+}
+
+function renderCompareTab(agg){
+  if (!agg) return;
+  const series = state.compareStores.map(name => ({ name, values: agg.storeWeek[name] || new Array(agg.n).fill(0) }));
+  renderLineChart(document.getElementById('compareChart'), series, agg.activeLabels);
+
+  const legendEl = document.getElementById('compareLegend');
+  legendEl.innerHTML = series.map((s,i)=>`<span class="legend-item"><span class="sw" style="background:${SERIES_COLORS[i%SERIES_COLORS.length]}"></span>${s.name}</span>`).join('');
+
+  const tbody = document.getElementById('compareTable');
+  if (series.length === 0){
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--text-muted);">No stores selected yet</td></tr>`;
+  } else {
+    tbody.innerHTML = series.map(s=>{
+      const total = s.values.reduce((a,b)=>a+b,0);
+      const weeksActive = s.values.filter(v=>v>0).length;
+      const avg = weeksActive ? total/weeksActive : 0;
+      const maxIdx = s.values.indexOf(Math.max(...s.values));
+      const bestLabel = s.values[maxIdx] > 0 ? agg.activeLabels[maxIdx] : '—';
+      return `<tr><td class="item">${s.name}</td><td class="num">${fmt(total)}</td><td class="num">${weeksActive} / ${agg.n}</td><td class="num">${fmt(avg)}</td><td>${bestLabel}</td></tr>`;
+    }).join('');
+  }
+}
+
+/* ============ Tabs ============ */
+function setTab(tab){
+  state.tab = tab;
+  document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('active', b.getAttribute('data-tab')===tab));
+  document.getElementById('tab-detail').classList.toggle('active', tab==='detail');
+  document.getElementById('tab-compare').classList.toggle('active', tab==='compare');
+  document.querySelectorAll('.board-row').forEach(r=>r.classList.toggle('active', tab==='detail' && r.getAttribute('data-name')===state.selectedStore));
+}
+function wireTabs(){
+  document.getElementById('tabs').addEventListener('click', (evt)=>{
+    const btn = evt.target.closest('button');
+    if (!btn) return;
+    setTab(btn.getAttribute('data-tab'));
+  });
+}
+
+/* ============ Master render ============ */
+let lastAgg = null;
+let lastTrends = {};
+function renderAll(){
+  const rows = activeRows();
+  const agg = aggregate(rows);
+  const trends = computeTrends();
+  lastAgg = agg; lastTrends = trends;
+  renderKpis(agg);
+  renderFilterSummary(agg);
+  renderCompanyChart(agg);
+  renderBoard(agg, trends);
+  renderNoMovement(agg);
+  updateFreshnessBadge();
+  renderSelect(agg);
+  if (!state.selectedStore || !DATA.stores.includes(state.selectedStore)) {
+    const ranked = Object.entries(agg.storeTotal).filter(([n,t])=>t>0 && storeVisible(n)).sort((a,b)=>b[1]-a[1]);
+    state.selectedStore = (ranked[0] || [visibleStores()[0] || DATA.stores[0]])[0];
+  }
+  document.getElementById('storeSelect').value = state.selectedStore;
+  renderStoreDetail(agg);
+  renderCompareTab(agg);
+}
+function renderCompanyChart(agg){
+  renderBarChart(document.getElementById('companyChart'), agg.weekTotals, agg.activeLabels);
+}
+
+/* ============ Data source badge ============ */
+function updateSourceBadge(){
+  const b = document.getElementById('srcBadge');
+  const t = document.getElementById('srcBadgeText');
+  if (dataSource === 'live'){
+    b.classList.add('live');
+    t.textContent = 'Live Data (Supabase)';
+  } else {
+    b.classList.remove('live');
+    t.textContent = `Snapshot Data (${DATA.weeks.length} Wks Embedded)`;
+  }
+}
+function parseWeekToDate(w){
+  if (/^\d{4}-\d{2}-\d{2}$/.test(w)) return new Date(w+'T00:00:00');
+  const m = String(w).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (m) return new Date(+m[3], +m[2]-1, +m[1]);
+  return new Date(w);
+}
+function updateFreshnessBadge(){
+  const badge = document.getElementById('freshnessBadge');
+  if (!DATA.weeks.length){ badge.textContent = ''; badge.className = 'freshness'; return; }
+  const latestLabel = DATA.weekLabels[DATA.weekLabels.length-1];
+  const latestDate = parseWeekToDate(DATA.weeks[DATA.weeks.length-1]);
+  const daysSince = Math.floor((Date.now() - latestDate.getTime()) / 86400000);
+  const weeksSince = Math.max(0, Math.floor(daysSince/7));
+  let cls, label;
+  if (weeksSince < 2){ cls = 'fresh'; label = 'Up To Date'; }
+  else if (weeksSince < 4){ cls = 'due'; label = `${weeksSince} Wks Behind`; }
+  else { cls = 'stale'; label = `${weeksSince} Wks Behind`; }
+  badge.className = 'freshness ' + cls;
+  badge.textContent = `Latest Week Ending: ${latestLabel} · ${label}`;
+}
+async function attemptLiveLoad(){
+  const live = await tryLoadLive();
+  if (live && live.rows.length){
+    DATA = live;
+    dataSource = 'live';
+  } else {
+    DATA = EMBEDDED_DATA;
+    dataSource = 'snapshot';
+  }
+  updateSourceBadge();
+}
+
+/* ============ Weekly Harvey Norman file upload ============ */
+/* The file is the "Digital Door Locks PTY LTD" stock and sales workbook (.xls):
+   - Summary sheet: FROM DATE / TO DATE (Excel serial dates) and per-SKU Total Sales.
+   - Sales sheet: one row per SKU (PRODUCT, PROD DESC, TOTAL SALES, ...), store columns from column G onward.
+   The store columns are matched by NAME (they shift between weeks and sheets), and only
+   non-zero cells are saved. Every store column is also sent so zero-sale stores show in No Movement. */
+const KEEP_UPPER = new Set(['HN','DM','JM','QV','AVIT']);
+function prettyStore(raw){
+  return String(raw).trim().split(/\s+/).map(w=>{
+    if (KEEP_UPPER.has(w)) return w;
+    if (w === 'AT') return 'at';
+    let x = w.toLowerCase().replace(/(^|-)([a-z])/g, (m,a,b)=>a+b.toUpperCase());
+    if (/^o'[a-z]/i.test(x)) x = "O'" + x[2].toUpperCase() + x.slice(3);
+    return x;
+  }).join(' ');
+}
+function bannerOf(raw){ return ({HN:'Harvey Norman', DM:'Domayne', JM:'Joyce Mayne'})[String(raw).trim().split(/\s+/)[0]] || 'Other'; }
+function isCommercialStore(raw){ return /\b(COMM|COMMERCIAL|INSURANCE|AVIT|ONLINE)\b/.test(String(raw).toUpperCase()); }
+const pad2 = n => String(n).padStart(2,'0');
+function cellToISODate(v){
+  if (typeof v === 'number' && isFinite(v)){
+    const d = XLSX.SSF.parse_date_code(v);
+    if (d && d.y) return `${d.y}-${pad2(d.m)}-${pad2(d.d)}`;
+  }
+  if (v instanceof Date && !isNaN(v)) return `${v.getFullYear()}-${pad2(v.getMonth()+1)}-${pad2(v.getDate())}`;
+  const m = String(v||'').trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (m) return `${m[3]}-${pad2(m[2])}-${pad2(m[1])}`;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(String(v||'').trim())) return String(v).trim();
+  return null;
+}
+function findSheet(wb, name){
+  const key = wb.SheetNames.find(n => n.trim().toLowerCase() === name.toLowerCase());
+  return key ? wb.Sheets[key] : null;
+}
+function workbookToWeek(wb){
+  const sm = findSheet(wb, 'Summary'), sales = findSheet(wb, 'Sales');
+  if (!sm || !sales) throw new Error('missing the Summary or Sales sheet — is this the Harvey Norman stock and sales file?');
+  const smRows = XLSX.utils.sheet_to_json(sm, { header:1, raw:true, defval:'' });
+  let fromRaw = null, toRaw = null, hdrRow = -1, codeCol = 0, salesCol = -1;
+  smRows.forEach((r, ri) => {
+    r.forEach((c, ci) => {
+      const t = String(c).trim().toUpperCase();
+      if (t === 'FROM DATE' && fromRaw === null) fromRaw = r[ci+1];
+      if (t === 'TO DATE' && toRaw === null) toRaw = r[ci+1];
+      if (t === 'TOTAL SALES' && hdrRow === -1){ hdrRow = ri; salesCol = ci; }
+      if (t === 'CODE' && hdrRow === -1) codeCol = ci;
+    });
+  });
+  const week = cellToISODate(toRaw), weekStart = cellToISODate(fromRaw);
+  if (!week) throw new Error('could not find the TO DATE on the Summary sheet');
+  let summaryTotal = null;
+  if (hdrRow >= 0){
+    summaryTotal = 0;
+    for (let i = hdrRow + 1; i < smRows.length; i++){
+      const r = smRows[i];
+      if (String(r[codeCol]||'').trim() && typeof r[salesCol] === 'number') summaryTotal += r[salesCol];
+    }
+  }
+  const sr = XLSX.utils.sheet_to_json(sales, { header:1, raw:true, defval:'' });
+  if (!sr.length || String(sr[0][0]).trim().toUpperCase() !== 'PRODUCT') throw new Error('the Sales sheet does not start with a PRODUCT column');
+  const header = sr[0];
+  const cols = [];
+  for (let i = 6; i < header.length; i++){
+    const n = String(header[i]||'').trim();
+    if (!n || /^tot/i.test(n)) continue;
+    cols.push([i, n]);
+  }
+  if (!cols.length) throw new Error('no store columns found on the Sales sheet');
+  const stores = cols.map(([,n]) => ({ store_raw:n, store:prettyStore(n), banner:bannerOf(n), is_commercial:isCommercialStore(n) }));
+  const rows = [];
+  let total = 0;
+  for (let ri = 1; ri < sr.length; ri++){
+    const r = sr[ri];
+    const code = String(r[0]||'').trim(), desc = String(r[1]||'').trim();
+    if (!code) continue;
+    const brand = (desc.split(/\s+/)[0] || '').toUpperCase();
+    cols.forEach(([ci, n], k) => {
+      const q = typeof r[ci] === 'number' ? r[ci] : Number(String(r[ci]||'').trim() || 0);
+      if (!isFinite(q) || q === 0) return;
+      const st = stores[k];
+      rows.push({ store_raw:n, store:st.store, banner:st.banner, brand, item_code:code, description:desc, sold_qty:q });
+      total += q;
+    });
+  }
+  return { week, weekStart, stores, rows, total, summaryTotal };
+}
+function setUploadStatus(msg, cls){
+  const el = document.getElementById('uploadStatus');
+  el.textContent = msg;
+  el.className = cls || '';
+}
+function readFileAsArrayBuffer(file){
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result);
+    r.onerror = () => reject(new Error('could not read ' + file.name));
+    r.readAsArrayBuffer(file);
+  });
+}
+function initUpload(){
+  const fileInput = document.getElementById('csvInput');
+  const chooseBtn = document.getElementById('chooseCsv');
+  const uploadBtn = document.getElementById('doUpload');
+  const passInput = document.getElementById('uploadPassphrase');
+  let pendingWeeks = null;
+
+  chooseBtn.addEventListener('click', () => fileInput.click());
+
+  fileInput.addEventListener('change', async () => {
+    const files = [...fileInput.files];
+    pendingWeeks = null;
+    uploadBtn.disabled = true;
+    if (!files.length){ setUploadStatus('', ''); return; }
+    if (typeof XLSX === 'undefined'){ setUploadStatus('The Excel reader did not load — check your connection and refresh the page.', 'err'); return; }
+    setUploadStatus(`Reading ${files.length} file${files.length===1?'':'s'}…`, 'busy');
+    const byWeek = new Map(); const problems = []; const warnings = [];
+    for (const f of files){
+      try {
+        const wb = XLSX.read(await readFileAsArrayBuffer(f), { type:'array' });
+        const wk = workbookToWeek(wb);
+        if (wk.summaryTotal !== null && Math.abs(wk.summaryTotal - wk.total) > 1e-9)
+          warnings.push(`w/e ${weekLabelOf(wk.week)}: store columns add to ${fmt(wk.total)} but the Summary says ${fmt(wk.summaryTotal)}`);
+        byWeek.set(wk.week, wk);
+      } catch (e){ problems.push(`${f.name}: ${e.message}`); }
+    }
+    if (!byWeek.size){ setUploadStatus('Could not read ' + (problems.join(' · ') || 'these files'), 'err'); return; }
+    pendingWeeks = [...byWeek.values()].sort((a,b)=>a.week.localeCompare(b.week));
+    const list = pendingWeeks.map(w => `w/e ${weekLabelOf(w.week)} (${fmt(w.total)} units, ${w.stores.length} stores)`).join(', ');
+    let msg = `Ready: ${list}.`;
+    if (warnings.length) msg += ' Check: ' + warnings.join('; ') + '.';
+    if (problems.length) msg += ' Skipped: ' + problems.join('; ') + '.';
+    msg += ' Enter the passphrase and click "Add to Dashboard".';
+    setUploadStatus(msg, warnings.length || problems.length ? 'busy' : 'ok');
+    uploadBtn.disabled = false;
+  });
+
+  uploadBtn.addEventListener('click', async () => {
+    if (!pendingWeeks || !pendingWeeks.length) return;
+    const passphrase = (passInput.value || '').trim();
+    if (!passphrase){ setUploadStatus('Enter the upload passphrase first.', 'err'); passInput.focus(); return; }
+    if (typeof supabase === 'undefined'){ setUploadStatus('Could not reach Supabase — refresh the page and try again.', 'err'); return; }
+    uploadBtn.disabled = true;
+    chooseBtn.disabled = true;
+    const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    let done = 0;
+    try {
+      for (const wk of pendingWeeks){
+        setUploadStatus(`Saving w/e ${weekLabelOf(wk.week)}… (${done} of ${pendingWeeks.length} weeks done)`, 'busy');
+        const { data, error } = await client.rpc(UPLOAD_RPC, { p_passphrase: passphrase, p_week: wk.week, p_rows: wk.rows, p_stores: wk.stores });
+        if (error){
+          const m = /passphrase/i.test(error.message || '') ? 'Wrong passphrase — nothing was saved.' : (error.message || 'Upload failed');
+          throw new Error(m);
+        }
+        done++;
+      }
+      setUploadStatus(`Saved ${done} week${done===1?'':'s'}. Refreshing dashboard…`, 'busy');
+      await attemptLiveLoad();
+      renderBannerPills();
+      resetFilters();
+      fileInput.value = '';
+      passInput.value = '';
+      pendingWeeks = null;
+      setUploadStatus(`Done — ${done} week${done===1?'':'s'} saved and the dashboard is up to date.`, 'ok');
+    } catch (e){
+      setUploadStatus((done ? `Saved ${done} week${done===1?'':'s'}, then stopped: ` : '') + e.message, 'err');
+      uploadBtn.disabled = false;
+    } finally {
+      chooseBtn.disabled = false;
+    }
+  });
+}
+
+/* ============ Boot ============ */
+async function boot(){
+  await attemptLiveLoad();
+  resetStateDefaults();
+
+  renderBrandPills();
+  wireBrandPills();
+  renderBannerPills();
+  wireBannerPills();
+  wireProductDropdown();
+  wireWeekRange();
+  wireUnitToggle();
+  wireChannelToggle();
+  wireStoreRankToggle();
+  wireTabs();
+  wireCompareAdd();
+  initUpload();
+  document.getElementById('btnReset').addEventListener('click', resetFilters);
+  document.getElementById('btnCsv').addEventListener('click', exportCsv);
+  document.getElementById('btnPrint').addEventListener('click', ()=>window.print());
+  document.getElementById('storeSelect').addEventListener('change', (e)=> selectStore(e.target.value, lastAgg));
+  document.getElementById('srcBadge').addEventListener('click', async ()=>{
+    document.getElementById('srcBadgeText').textContent = 'Checking…';
+    await attemptLiveLoad();
+    renderAll();
+  });
+
+  const savedStore = loadLastStore();
+  state.selectedStore = (savedStore && DATA.stores.includes(savedStore)) ? savedStore : null;
+  syncBannerPills();
+
+  renderAll();
+
+  const rankedInit = Object.entries(lastAgg.storeTotal).filter(([n,t])=>t>0 && storeVisible(n)).sort((a,b)=>b[1]-a[1]).map(([n])=>n);
+  state.compareStores = rankedInit.slice(0, 3);
+  renderCompareChips();
+  renderCompareTab(lastAgg);
+  syncProductBtn();
+
+  window.addEventListener('resize', ()=>{
+    if (lastAgg){
+      renderCompanyChart(lastAgg);
+      renderStoreDetail(lastAgg);
+      renderCompareTab(lastAgg);
+    }
+  });
+}
+
+boot();
+</script>
+</body>
+</html>

@@ -1,0 +1,1433 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Harvey Norman Sales per Model</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<style>
+:root{
+  --page-bg:#f9f9f7;
+  --surface:#fcfcfb;
+  --surface-2:#ffffff;
+  --text-primary:#0b0b0b;
+  --text-secondary:#52514e;
+  --text-muted:#898781;
+  --border:rgba(11,11,11,0.10);
+  --grid:#e1e0d9;
+  --baseline:#c3c2b7;
+  --accent:#2a78d6;
+  --accent-soft:rgba(42,120,214,0.12);
+  --accent-wash:rgba(42,120,214,0.08);
+  --good:#0ca30c;
+  --critical:#d03b3b;
+  --warn:#b8860b;
+  --good-soft:rgba(12,163,12,0.12);
+  --warn-soft:rgba(184,134,11,0.14);
+  --critical-soft:rgba(208,59,59,0.12);
+  --shadow:0 1px 2px rgba(11,11,11,0.04), 0 8px 24px rgba(11,11,11,0.06);
+  /* categorical series slots — fixed order (validated palette) */
+  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#eda100; --s5:#e87ba4; --s6:#008300; --s7:#4a3aa7; --s8:#e34948;
+  color-scheme:light;
+}
+/* Dark mode auto-switch removed (Oct 2026) — forced to always render light,
+   matching index.html / bing-lee-store-sales.html (see those files for why). */
+
+*{box-sizing:border-box;}
+html,body{background:var(--page-bg);}
+body{
+  color:var(--text-primary);
+  font-family:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+  padding-inline:16px;
+  padding-block:28px 48px;
+  margin:0;
+}
+.wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:22px;}
+
+/* ---------- Titlebar ---------- */
+.titlebar{background:var(--surface);border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow);padding:16px 22px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;}
+.dots{display:flex;gap:7px;flex:0 0 auto;}
+.dot{width:12px;height:12px;border-radius:50%;}
+.dot.red{background:#ff5f57;} .dot.yellow{background:#febc2e;} .dot.green{background:#28c840;}
+.titletext{flex:1 1 220px;min-width:0;}
+.titletext h1{font-size:16px;font-weight:600;margin:0;letter-spacing:-0.01em;}
+.titletext p{margin:2px 0 0;font-size:12.5px;color:var(--text-muted);}
+.toolbtns{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+.iconbtn{
+  display:inline-flex;align-items:center;gap:6px;
+  font-size:12px;font-weight:600;font-family:inherit;
+  color:var(--text-secondary);background:var(--surface-2);
+  border:1px solid var(--border);border-radius:9px;padding:7px 13px;cursor:pointer;
+  text-decoration:none;
+}
+.iconbtn:hover{color:var(--text-primary);border-color:var(--accent);}
+.freshness{display:inline-flex;align-items:center;font-size:11px;font-weight:600;padding:5px 10px;border-radius:99px;white-space:nowrap;border:1px solid var(--border);background:var(--surface-2);color:var(--text-secondary);}
+.freshness.fresh{color:var(--good);border-color:transparent;background:var(--good-soft);}
+.freshness.due{color:var(--warn);border-color:transparent;background:var(--warn-soft);}
+.freshness.stale{color:var(--critical);border-color:transparent;background:var(--critical-soft);}
+.srcbadge{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:600;padding:5px 10px;border-radius:99px;white-space:nowrap;border:1px solid var(--border);color:var(--text-secondary);cursor:pointer;background:var(--surface-2);font-family:inherit;}
+.srcbadge .dot2{width:7px;height:7px;border-radius:50%;background:var(--text-muted);}
+.srcbadge.live .dot2{background:var(--good);}
+.srcbadge.live{color:var(--good);}
+
+/* ---------- Error banner ---------- */
+#loadError{display:none;background:var(--critical-soft);border:1px solid var(--critical);color:var(--critical);
+  padding:12px 18px;border-radius:12px;font-size:13px;font-weight:500;}
+
+/* ---------- KPI strip ---------- */
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}
+.kpi{background:var(--surface);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);padding:16px 18px;min-width:0;}
+.kpi .label{font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-muted);margin:0 0 8px;}
+.kpi .value{font-size:26px;font-weight:600;letter-spacing:-0.01em;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.kpi .sub{margin:4px 0 0;font-size:12px;color:var(--text-secondary);}
+
+/* ---------- Filter bar ---------- */
+.filterbar{background:var(--surface);border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow);padding:16px 20px;display:flex;flex-direction:column;gap:12px;}
+.filterrow{display:flex;align-items:center;gap:16px;flex-wrap:wrap;}
+.filtergroup{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.filtergroup .flabel{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-muted);margin-right:2px;}
+.seg{display:inline-flex;background:var(--surface-2);border:1px solid var(--border);border-radius:9px;padding:2px;gap:2px;}
+.seg button{
+  font-family:inherit;font-size:12px;font-weight:600;color:var(--text-secondary);
+  background:transparent;border:none;border-radius:7px;padding:6px 11px;cursor:pointer;
+}
+.seg button.active{background:var(--accent);color:#fff;}
+.pill{
+  font-family:inherit;font-size:12px;font-weight:600;color:var(--text-secondary);
+  background:var(--surface-2);border:1px solid var(--border);border-radius:99px;padding:6px 13px;cursor:pointer;
+}
+.pill.active{background:var(--accent-soft);color:var(--accent);border-color:var(--accent);}
+input[type="search"]{
+  background:var(--surface-2);color:var(--text-primary);border:1px solid var(--border);
+  border-radius:9px;padding:7px 12px;font-size:12.5px;font-family:inherit;min-width:200px;
+}
+select{
+  appearance:none;background:var(--surface-2);color:var(--text-primary);border:1px solid var(--border);
+  border-radius:9px;padding:7px 30px 7px 12px;font-size:12.5px;font-family:inherit;font-weight:500;
+  background-image:linear-gradient(45deg,transparent 50%,var(--text-muted) 50%),linear-gradient(135deg,var(--text-muted) 50%,transparent 50%);
+  background-position:calc(100% - 16px) center,calc(100% - 11px) center;background-size:5px 5px,5px 5px;background-repeat:no-repeat;cursor:pointer;
+}
+.linklike{font-size:11px;font-weight:600;color:var(--accent);background:none;border:none;cursor:pointer;font-family:inherit;padding:0;}
+.reset-link{margin-left:auto;}
+.filter-summary{font-size:12px;color:var(--text-muted);}
+
+/* ---------- Panels ---------- */
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow);padding:20px 22px 22px;overflow-x:auto;}
+.panel-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px;}
+.panel-head h2{font-size:14.5px;font-weight:600;margin:0;letter-spacing:-0.005em;}
+.panel-head .hint{font-size:12px;color:var(--text-muted);}
+.panel-head .headctrls{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+
+/* ---------- Table ---------- */
+.table-scroll{overflow-x:auto;}
+table{width:100%;border-collapse:collapse;font-size:13px;}
+thead th{text-align:left;font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-muted);padding:0 10px 8px;border-bottom:1px solid var(--border);white-space:nowrap;}
+thead th.num{text-align:right;}
+tbody td{padding:9px 10px;border-bottom:1px solid var(--border);color:var(--text-secondary);vertical-align:top;white-space:nowrap;}
+tbody tr:last-child td{border-bottom:none;}
+tbody td.item{color:var(--text-primary);font-weight:600;font-size:12.5px;}
+tbody td.desc{font-size:12px;white-space:normal;max-width:280px;}
+tbody td.brand{font-size:11.5px;color:var(--text-muted);}
+tbody td.num{text-align:right;font-variant-numeric:tabular-nums;font-weight:600;color:var(--text-primary);}
+.empty-row td{text-align:center;color:var(--text-muted);padding:24px 10px;font-weight:400;}
+
+/* matrix: sticky first column + sticky header */
+.matrix-wrap{max-height:70vh;overflow:auto;border:1px solid var(--border);border-radius:10px;}
+.matrix{min-width:100%;}
+.matrix th{position:sticky;top:0;background:var(--surface-2);z-index:2;}
+.matrix th:first-child,.matrix td:first-child{position:sticky;left:0;background:var(--surface);z-index:1;min-width:190px;white-space:nowrap;}
+.matrix th:first-child{z-index:3;}
+.matrix td,.matrix th{border-right:1px solid var(--border);}
+.matrix td.zero{color:var(--baseline);}
+
+/* ---------- Multi-select store dropdown ---------- */
+.dropdown{position:relative;}
+.dropdown-btn{
+  font-family:inherit;font-size:12.5px;font-weight:600;color:var(--text-secondary);
+  background:var(--surface-2);border:1px solid var(--border);border-radius:9px;padding:7px 12px;cursor:pointer;
+  display:inline-flex;align-items:center;gap:8px;min-width:170px;justify-content:space-between;
+}
+.dropdown-btn.active{border-color:var(--accent);color:var(--accent);}
+.dropdown-panel{
+  display:none;position:absolute;top:calc(100% + 6px);left:0;z-index:30;
+  background:var(--surface-2);border:1px solid var(--border);border-radius:11px;box-shadow:var(--shadow);
+  padding:10px;width:290px;max-height:360px;overflow-y:auto;
+}
+.dropdown-panel.show{display:block;}
+.dropdown-panel input[type="search"]{width:100%;min-width:0;margin-bottom:8px;}
+.dropdown-actions{display:flex;justify-content:space-between;margin-bottom:6px;}
+.chk-row{display:flex;align-items:center;gap:8px;padding:5px 4px;font-size:12.5px;cursor:pointer;border-radius:6px;}
+.chk-row:hover{background:var(--accent-wash);}
+.chk-row .ci-name{flex:1;font-weight:600;color:var(--text-primary);}
+.chk-row .ci-units{color:var(--text-muted);font-size:11px;font-variant-numeric:tabular-nums;}
+
+/* ---------- Weekly trend chart ---------- */
+.chart-wrap{position:relative;}
+.chart-wrap svg{width:100%;height:auto;display:block;overflow:visible;touch-action:pan-y;}
+.chart-wrap svg:focus-visible{outline:2px solid var(--accent);outline-offset:4px;border-radius:6px;}
+.gridline{stroke:var(--grid);stroke-width:1;shape-rendering:crispEdges;}
+.baseline{stroke:var(--baseline);stroke-width:1;shape-rendering:crispEdges;}
+.axis-label{fill:var(--text-muted);font-size:10.5px;font-family:inherit;}
+.end-label{fill:var(--text-secondary);font-size:10.5px;font-weight:600;font-family:inherit;}
+.end-label.total{fill:var(--text-primary);font-weight:700;}
+.series-line{fill:none;stroke-width:2;stroke-linejoin:round;stroke-linecap:round;}
+.crosshair{stroke:var(--baseline);stroke-width:1;shape-rendering:crispEdges;}
+.trend-empty{padding:44px 10px;text-align:center;color:var(--text-muted);font-size:13px;}
+.tt{
+  position:absolute;pointer-events:none;background:var(--surface-2);border:1px solid var(--border);
+  box-shadow:var(--shadow);border-radius:10px;padding:9px 11px;font-size:12px;min-width:190px;max-width:320px;
+  opacity:0;transition:opacity .1s ease;z-index:5;
+}
+.tt.show{opacity:1;}
+.tt .tt-head{font-size:11px;font-weight:600;color:var(--text-muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.04em;}
+.tt .tt-row{display:flex;align-items:center;gap:8px;padding:2px 0;}
+.tt .tt-row.total{padding-bottom:5px;margin-bottom:3px;border-bottom:1px solid var(--border);}
+.tt .tt-key{width:14px;height:3px;border-radius:2px;flex:0 0 auto;}
+.tt .tt-val{font-weight:700;color:var(--text-primary);font-variant-numeric:tabular-nums;min-width:28px;text-align:right;}
+.tt .tt-name{color:var(--text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.legend{display:flex;flex-wrap:wrap;gap:4px 10px;margin-top:12px;align-items:center;}
+.legend-chip{
+  display:inline-flex;align-items:center;gap:7px;font-family:inherit;font-size:12px;font-weight:500;
+  color:var(--text-secondary);background:none;border:1px solid transparent;border-radius:8px;padding:3px 8px;cursor:pointer;
+}
+.legend-chip:hover{border-color:var(--border);}
+.legend-chip[aria-pressed="false"]{opacity:.45;text-decoration:line-through;}
+.legend-chip.static{cursor:default;}
+.legend-chip.static:hover{border-color:transparent;}
+.legend-chip .lkey{width:16px;height:3px;border-radius:2px;flex:0 0 auto;}
+.legend-chip .lunits{color:var(--text-muted);font-size:11px;font-variant-numeric:tabular-nums;}
+details.trend-table{margin-top:12px;}
+details.trend-table summary{font-size:12px;font-weight:600;color:var(--accent);cursor:pointer;}
+details.trend-table .table-scroll{margin-top:10px;}
+details.trend-table td.item{max-width:200px;overflow:hidden;text-overflow:ellipsis;}
+
+/* ---------- Store detail ---------- */
+.detail-pick{display:flex;align-items:center;gap:8px;}
+.detail-pick label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-muted);}
+.detail-pick select{min-width:260px;max-width:100%;}
+.mini-kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:18px;}
+.mini-kpi{background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:11px 14px;min-width:0;}
+.mini-kpi .label{font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-muted);margin:0 0 5px;}
+.mini-kpi .value{font-size:18px;font-weight:600;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.mini-kpi .value.small{font-size:13.5px;}
+.mini-kpi .value .when{font-size:11px;font-weight:500;color:var(--text-muted);}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start;}
+.two-col > div{min-width:0;}
+.two-col h3{font-size:12.5px;font-weight:600;margin:0 0 10px;color:var(--text-secondary);}
+.dbar{fill:var(--accent);cursor:pointer;}
+.dbar:hover{opacity:0.82;}
+.dbar.zero{fill:var(--grid);}
+.value-label{fill:var(--text-secondary);font-size:10.5px;font-weight:600;font-family:inherit;}
+.trendbadge{font-size:11.5px;font-weight:700;white-space:nowrap;}
+.trendbadge.up{color:var(--good);}
+.trendbadge.down{color:var(--critical);}
+.trendbadge.flag{color:var(--critical);background:var(--critical-soft);padding:1px 6px;border-radius:5px;}
+.trendbadge.new{color:var(--accent);}
+.trendbadge.flat{color:var(--text-muted);}
+.detail-table-scroll{max-height:340px;overflow:auto;}
+tr.clickable{cursor:pointer;}
+tr.clickable:hover td{background:var(--accent-wash);}
+
+footer{text-align:center;font-size:11.5px;color:var(--text-muted);padding-top:4px;}
+
+@media (max-width:860px){
+  .kpis{grid-template-columns:repeat(2,1fr);}
+  .two-col{grid-template-columns:1fr;}
+  .mini-kpis{grid-template-columns:repeat(2,1fr);}
+  select,input[type="search"]{min-width:0;width:100%;}
+  .filterrow{gap:10px;}
+  .pill,.seg button,.iconbtn{padding-block:9px;}
+}
+@media print{
+  body{background:#fff !important;color:#000 !important;padding:0;}
+  .filterbar,.toolbtns{display:none !important;}
+  .panel,.titlebar,.kpi{box-shadow:none !important;border:1px solid #ccc !important;background:#fff !important;}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="titlebar">
+    <div class="dots"><span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span></div>
+    <div class="titletext">
+      <h1>Sales per Model per Store</h1>
+      <p>Harvey Norman Weekly Unit Sales By Product Model &amp; Store &mdash; Companion To The Store Sales Dashboard</p>
+    </div>
+    <span class="freshness" id="freshnessBadge"></span>
+    <button class="srcbadge" id="srcBadge" title="Click to retry loading live data">
+      <span class="dot2"></span><span id="srcBadgeText">Loading&hellip;</span>
+    </button>
+    <div class="toolbtns">
+      <a class="iconbtn" href="index.html">&larr; Back to Dashboard</a>
+      <button class="iconbtn" id="btnPrint">Print / Save PDF</button>
+    </div>
+  </div>
+
+  <div id="loadError"></div>
+
+  <div class="kpis" id="kpiStrip">
+    <div class="kpi"><div class="label">Total Units</div><div class="value" id="kpiUnits">&ndash;</div><div class="sub" id="kpiUnitsSub">&nbsp;</div></div>
+    <div class="kpi"><div class="label">Models Selling</div><div class="value" id="kpiModels">&ndash;</div><div class="sub" id="kpiModelsSub">&nbsp;</div></div>
+    <div class="kpi"><div class="label">Stores Selling</div><div class="value" id="kpiStores">&ndash;</div><div class="sub" id="kpiStoresSub">&nbsp;</div></div>
+    <div class="kpi"><div class="label">Model / Store Pairs</div><div class="value" id="kpiPairs">&ndash;</div><div class="sub">with sales in range</div></div>
+  </div>
+
+  <div class="filterbar">
+    <div class="filterrow">
+      <div class="filtergroup">
+        <span class="flabel">Week From</span>
+        <select id="weekFrom"></select>
+        <span class="flabel" style="margin-left:2px;">To</span>
+        <select id="weekTo"></select>
+      </div>
+
+      <div class="filtergroup">
+        <span class="flabel">Units</span>
+        <div class="seg" id="segUnits">
+          <button data-unit="net" class="active">Net</button>
+          <button data-unit="gross">Gross</button>
+        </div>
+      </div>
+
+      <div class="filtergroup">
+        <span class="flabel">Brand</span>
+        <div id="brandChips"></div>
+      </div>
+
+      <div class="filtergroup">
+        <span class="flabel">Banner</span>
+        <div id="bannerChips"></div>
+      </div>
+
+      <div class="filtergroup">
+        <span class="flabel">Store Type</span>
+        <div class="seg" id="segChannel">
+          <button data-channel="stores" class="active">Retail Stores</button>
+          <button data-channel="all">Include Commercial &amp; Online</button>
+        </div>
+      </div>
+    </div>
+    <div class="filterrow">
+      <div class="filtergroup">
+        <span class="flabel">Model</span>
+        <input type="search" id="modelSearch" list="modelList" autocomplete="off" placeholder="All Models — Click Or Type To Filter">
+        <datalist id="modelList"></datalist>
+      </div>
+      <div class="filtergroup">
+        <span class="flabel">Stores</span>
+        <div class="dropdown" id="storeDropdown">
+          <button type="button" class="dropdown-btn" id="storeBtn" aria-haspopup="true" aria-expanded="false">
+            <span id="storeBtnLabel">All Stores</span><span aria-hidden="true">&#9662;</span>
+          </button>
+          <div class="dropdown-panel" id="storePanel">
+            <input type="search" id="storeFilterSearch" autocomplete="off" placeholder="Search stores&hellip;">
+            <div class="dropdown-actions">
+              <button type="button" class="linklike" id="storeSelectShown">Select All Shown</button>
+              <button type="button" class="linklike" id="storeClear">Clear (All Stores)</button>
+            </div>
+            <div id="storeOptions"></div>
+          </div>
+        </div>
+      </div>
+      <button class="linklike reset-link" id="btnReset">Reset Filters</button>
+    </div>
+    <div class="filter-summary" id="filterSummary"></div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head">
+      <h2>Weekly Trend</h2>
+      <div class="headctrls">
+        <span class="hint" id="trendScope"></span>
+        <div class="seg" id="segTrendBy" title="What each line represents">
+          <button data-by="model" class="active">Lines By Model</button>
+          <button data-by="store">Lines By Store</button>
+        </div>
+        <div class="seg" id="segTrendTop" title="How many lines to show before folding the rest into Other">
+          <button data-top="5" class="active">Top 5</button>
+          <button data-top="8">Top 8</button>
+        </div>
+      </div>
+    </div>
+    <div class="chart-wrap" id="trendChart"></div>
+    <div class="legend" id="trendLegend"></div>
+    <details class="trend-table">
+      <summary>Show Table View</summary>
+      <div class="table-scroll"><table id="trendTable"></table></div>
+    </details>
+  </div>
+
+  <div class="panel" id="storeDetail">
+    <div class="panel-head">
+      <h2>Store Detail</h2>
+      <div class="headctrls">
+        <span class="hint" id="detailScope"></span>
+        <div class="detail-pick">
+          <label for="detailStore">Store</label>
+          <select id="detailStore"></select>
+        </div>
+      </div>
+    </div>
+    <div class="mini-kpis" id="detailKpis"></div>
+    <div class="two-col">
+      <div>
+        <h3>Weekly Units At This Store</h3>
+        <div class="chart-wrap" id="detailChart"></div>
+      </div>
+      <div>
+        <h3>Products Sold At This Store</h3>
+        <div class="table-scroll detail-table-scroll">
+          <table>
+            <thead><tr><th>Item Code</th><th>Description</th><th>Brand</th><th class="num">Units</th></tr></thead>
+            <tbody id="detailProducts"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head">
+      <h2>By Model</h2>
+      <span class="hint">"Selling" counts stores with at least one unit sold in the selected period.</span>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead><tr>
+          <th>Item Code</th><th>Description</th><th>Brand</th>
+          <th class="num">Total Units</th><th class="num">Stores Selling</th><th class="num">Avg / Selling Store</th>
+        </tr></thead>
+        <tbody id="modelBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head">
+      <h2>By Store</h2>
+      <div class="headctrls"><button class="iconbtn" id="exportStores">Download CSV</button></div>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead><tr>
+          <th>Store</th><th class="num">Total Units</th><th class="num">Items Sold</th><th>Top Item</th>
+        </tr></thead>
+        <tbody id="storeBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head">
+      <h2>Model &times; Store Matrix</h2>
+      <div class="headctrls">
+        <div class="seg" id="rowLimitToggle">
+          <button data-limit="40" class="active">Top 40 Stores</button>
+          <button data-limit="0">All Stores</button>
+        </div>
+        <button class="iconbtn" id="exportMatrix">Download Full Matrix CSV</button>
+      </div>
+    </div>
+    <div class="matrix-wrap">
+      <table class="matrix">
+        <thead><tr id="matrixHead"></tr></thead>
+        <tbody id="matrixBody"></tbody>
+      </table>
+    </div>
+    <span class="hint">Stores are ordered by total, models by total. Blank cells mean no units sold for that model at that store in the selected period. The CSV download always contains every store and model, regardless of the view limit above.</span>
+  </div>
+
+  <footer>Harvey Norman &mdash; Store Sales Dashboard &middot; Internal DDL Group Tool &middot; Weeks Are Labelled By Week Ending (Sunday)</footer>
+</div>
+
+<script>
+/* ============================================================
+   Data source: Supabase tables harvey_norman_sales_rows, harvey_norman_stores
+   and harvey_norman_weeks (same tables as the main Harvey Norman Store Sales
+   Dashboard). The publishable key can only read them. This page is live-only
+   (no embedded snapshot) — it is a secondary analytical view of the main
+   dashboard's data.
+   ============================================================ */
+const SUPABASE_URL = 'https://vggbzpvgukprwpopewot.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_hG5I11kQ9k5IBYrHaCTkRg_WrwCXYAG';
+const SUPABASE_TABLE = 'harvey_norman_sales_rows';
+const STORES_TABLE = 'harvey_norman_stores';
+const WEEKS_TABLE = 'harvey_norman_weeks';
+const BANNER_ORDER = ['Harvey Norman','Domayne','Joyce Mayne','Other'];
+let storeMetaMap = {};  // display store name -> {banner, commercial}
+let banners = [];
+
+let rows = [];       // flat rows: {week, weekLabel, store, brand, item, desc, qty}
+let weeks = [];      // sorted unique ISO week strings
+let brands = [];     // sorted unique brand list
+
+const state = {
+  weekFrom: null, weekTo: null, unitMode: 'net', includeCommercial: false, banner: 'all',
+  brand: 'all', model: '', stores: new Set()   // empty set = all stores
+};
+let storeUnits = new Map();   // store -> units in the current scope (for the picker)
+let storeFilterText = '';
+let storePickerReady = false;
+const trend = { by: 'model', topN: 5, hidden: new Set(), slotOf: new Map() };
+
+const fmtNum = n => Math.round(n).toLocaleString();
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+function parseWeekToDate(w){
+  if (/^\d{4}-\d{2}-\d{2}$/.test(w)) return new Date(w+'T00:00:00');
+  const m = String(w).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (m) return new Date(+m[3], +m[2]-1, +m[1]);
+  return new Date(w);
+}
+function fmtWeekLabel(w){
+  const d = parseWeekToDate(w);
+  return d.toLocaleDateString('en-AU', {day:'2-digit', month:'short'});
+}
+
+/* ============ Live data loading, with retry ============ */
+async function fetchAllRows(client, table, cols, orderCol){
+  // PostgREST returns at most 1000 rows per request, so page through everything.
+  const out = []; const page = 1000;
+  for (let from = 0; ; from += page){
+    const { data, error } = await client.from(table).select(cols).order(orderCol, { ascending:true }).range(from, from + page - 1);
+    if (error) throw new Error(error.message || ('Supabase query failed on ' + table));
+    out.push(...(data || []));
+    if (!data || data.length < page) break;
+  }
+  return out;
+}
+async function fetchLive(attempt = 0){
+  const MAX = 3;
+  try{
+    const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const [records, storeList, weekList] = await Promise.all([
+      fetchAllRows(client, SUPABASE_TABLE, 'id,report_date,store,banner,brand,item_code,description,sold_qty', 'id'),
+      fetchAllRows(client, STORES_TABLE, 'store_raw,store,banner,is_commercial', 'store_raw'),
+      fetchAllRows(client, WEEKS_TABLE, 'report_date', 'report_date')
+    ]);
+    return { records, storeList, weekList };
+  } catch(e){
+    if (attempt < MAX){ await sleep(500 * Math.pow(2, attempt)); return fetchLive(attempt+1); }
+    throw e;
+  }
+}
+
+function transform({ records, storeList, weekList }){
+  storeMetaMap = {};
+  storeList.forEach(s => { storeMetaMap[s.store] = { banner: s.banner, commercial: !!s.is_commercial }; });
+  records.forEach(r => { if (!storeMetaMap[r.store]) storeMetaMap[r.store] = { banner: r.banner || 'Harvey Norman', commercial: false }; });
+  rows = records.map(r => ({
+    week: r.report_date,
+    store: r.store,
+    banner: storeMetaMap[r.store].banner,
+    commercial: storeMetaMap[r.store].commercial,
+    brand: r.brand,
+    item: r.item_code,
+    desc: r.description,
+    qty: Number(r.sold_qty) || 0
+  }));
+  weeks = [...new Set(weekList.map(w => w.report_date).concat(rows.map(r => r.week)))].sort();
+  brands = [...new Set(rows.map(r => r.brand))].filter(Boolean).sort();
+  const present = new Set(Object.values(storeMetaMap).map(m => m.banner));
+  banners = BANNER_ORDER.filter(b => present.has(b)).concat([...present].filter(b => !BANNER_ORDER.includes(b)).sort());
+}
+function storeInScope(r){
+  return (state.banner === 'all' || r.banner === state.banner) && (state.includeCommercial || !r.commercial);
+}
+
+async function loadData(){
+  const badge = document.getElementById('srcBadge');
+  const badgeText = document.getElementById('srcBadgeText');
+  const errEl = document.getElementById('loadError');
+  errEl.style.display = 'none';
+  badge.classList.remove('live');
+  badgeText.textContent = 'Loading…';
+  try{
+    const live = await fetchLive();
+    if (!live.records.length && !live.weekList.length){
+      errEl.style.display = 'block';
+      errEl.textContent = 'Connected to Supabase but found no rows. Add a weekly Harvey Norman file on the main dashboard first.';
+      badgeText.textContent = 'No Data';
+      return;
+    }
+    transform(live);
+    badge.classList.add('live');
+    badgeText.textContent = 'Live Data (Supabase)';
+    buildFilters();
+    updateFreshnessBadge();
+    render();
+  } catch(e){
+    errEl.style.display = 'block';
+    errEl.textContent = "Couldn't load data from Supabase: " + e.message;
+    badgeText.textContent = 'Load Failed';
+  }
+}
+
+function updateFreshnessBadge(){
+  const badge = document.getElementById('freshnessBadge');
+  if (!weeks.length){ badge.textContent = ''; badge.className = 'freshness'; return; }
+  const latest = weeks[weeks.length - 1];
+  const latestDate = parseWeekToDate(latest);
+  const daysSince = Math.floor((Date.now() - latestDate.getTime()) / 86400000);
+  const weeksSince = Math.max(0, Math.floor(daysSince / 7));
+  let cls, label;
+  if (weeksSince < 2){ cls = 'fresh'; label = 'Up To Date'; }
+  else if (weeksSince < 4){ cls = 'due'; label = `${weeksSince} Wks Behind`; }
+  else { cls = 'stale'; label = `${weeksSince} Wks Behind`; }
+  badge.className = 'freshness ' + cls;
+  badge.textContent = `Latest Week Ending: ${fmtWeekLabel(latest)} · ${label}`;
+}
+
+/* ============ Filters ============ */
+function rebuildWeekSelects(){
+  const opts = weeks.map(w => `<option value="${w}">${fmtWeekLabel(w)}</option>`).join('');
+  const f = document.getElementById('weekFrom'), t = document.getElementById('weekTo');
+  f.innerHTML = opts; t.innerHTML = opts;
+  state.weekFrom = weeks[0]; state.weekTo = weeks[weeks.length - 1];
+  f.value = state.weekFrom; t.value = state.weekTo;
+}
+function rebuildBrandChips(){
+  const wrap = document.getElementById('brandChips');
+  wrap.innerHTML = '<button class="pill active" data-brand="all">All</button>' +
+    brands.map(b => `<button class="pill" data-brand="${b}">${b}</button>`).join('');
+  wrap.querySelectorAll('.pill').forEach(btn => {
+    btn.addEventListener('click', () => {
+      wrap.querySelectorAll('.pill').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      state.brand = btn.getAttribute('data-brand');
+      rebuildPickers();
+      render();
+    });
+  });
+}
+function rebuildBannerChips(){
+  const wrap = document.getElementById('bannerChips');
+  wrap.innerHTML = '<button class="pill active" data-banner="all">All</button>' +
+    banners.map(b => `<button class="pill" data-banner="${b}">${b}</button>`).join('');
+  wrap.querySelectorAll('.pill').forEach(btn => {
+    btn.addEventListener('click', () => {
+      wrap.querySelectorAll('.pill').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      state.banner = btn.getAttribute('data-banner');
+      rebuildPickers();
+      render();
+    });
+  });
+}
+function rebuildPickers(){
+  const scoped = activeRowsExcept('model', 'store');
+  const models = new Map(), stores = new Map();
+  scoped.forEach(r => {
+    if (!models.has(r.item)) models.set(r.item, { desc: r.desc, units: 0 });
+    models.get(r.item).units += Math.max(r.qty, 0);
+    if (!stores.has(r.store)) stores.set(r.store, { units: 0 });
+    stores.get(r.store).units += Math.max(r.qty, 0);
+  });
+  document.getElementById('modelList').innerHTML =
+    [...models.entries()].sort((a,b) => b[1].units - a[1].units)
+      .map(([item, m]) => `<option value="${item}">${item}${m.desc ? '  —  ' + m.desc.slice(0,50) : ''}</option>`).join('');
+  storeUnits = new Map([...stores.entries()].map(([name, s]) => [name, s.units]));
+  renderStoreOptions();
+}
+
+/* ============ Multi-select store picker ============ */
+function updateStoreBtnLabel(){
+  const n = state.stores.size;
+  const btn = document.getElementById('storeBtn');
+  document.getElementById('storeBtnLabel').textContent =
+    n === 0 ? 'All Stores' : (n === 1 ? [...state.stores][0] : n + ' Stores Selected');
+  btn.classList.toggle('active', n > 0);
+}
+function visibleStoreNames(){
+  const names = new Set(storeUnits.keys());
+  state.stores.forEach(s => names.add(s));            // keep selected ones listed even if out of scope
+  const q = storeFilterText.trim().toLowerCase();
+  return [...names]
+    .filter(n => !q || n.toLowerCase().includes(q))
+    .sort((a, b) => (storeUnits.get(b) || 0) - (storeUnits.get(a) || 0) || a.localeCompare(b));
+}
+function renderStoreOptions(){
+  const box = document.getElementById('storeOptions');
+  box.textContent = '';
+  const names = visibleStoreNames();
+  if (!names.length){
+    const empty = document.createElement('div');
+    empty.className = 'filter-summary';
+    empty.style.padding = '8px 4px';
+    empty.textContent = 'No stores match';
+    box.appendChild(empty);
+  }
+  names.forEach(name => {
+    const row = document.createElement('label');
+    row.className = 'chk-row';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = state.stores.has(name);
+    cb.addEventListener('change', () => {
+      if (cb.checked) state.stores.add(name); else state.stores.delete(name);
+      updateStoreBtnLabel();
+      render();
+    });
+    const nm = document.createElement('span');
+    nm.className = 'ci-name';
+    nm.textContent = name;
+    const un = document.createElement('span');
+    un.className = 'ci-units';
+    un.textContent = fmtNum(storeUnits.get(name) || 0) + ' units';
+    row.append(cb, nm, un);
+    box.appendChild(row);
+  });
+  updateStoreBtnLabel();
+}
+function setupStorePicker(){
+  const btn = document.getElementById('storeBtn');
+  const panel = document.getElementById('storePanel');
+  const close = () => { panel.classList.remove('show'); btn.setAttribute('aria-expanded', 'false'); };
+  btn.addEventListener('click', e => {
+    e.stopPropagation();
+    const open = !panel.classList.contains('show');
+    panel.classList.toggle('show', open);
+    btn.setAttribute('aria-expanded', String(open));
+    if (open) document.getElementById('storeFilterSearch').focus();
+  });
+  panel.addEventListener('click', e => e.stopPropagation());
+  document.addEventListener('click', close);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') close(); });
+  document.getElementById('storeFilterSearch').addEventListener('input', e => {
+    storeFilterText = e.target.value;
+    renderStoreOptions();
+  });
+  document.getElementById('storeSelectShown').addEventListener('click', () => {
+    visibleStoreNames().forEach(n => state.stores.add(n));
+    renderStoreOptions(); render();
+  });
+  document.getElementById('storeClear').addEventListener('click', () => {
+    state.stores.clear();
+    renderStoreOptions(); render();
+  });
+}
+
+function buildFilters(){
+  rebuildWeekSelects();
+  rebuildBrandChips();
+  rebuildBannerChips();
+  rebuildPickers();
+
+  document.getElementById('weekFrom').addEventListener('change', e => {
+    state.weekFrom = e.target.value;
+    if (state.weekFrom > state.weekTo){ state.weekTo = state.weekFrom; document.getElementById('weekTo').value = state.weekTo; }
+    rebuildPickers(); render();
+  });
+  document.getElementById('weekTo').addEventListener('change', e => {
+    state.weekTo = e.target.value;
+    if (state.weekTo < state.weekFrom){ state.weekFrom = state.weekTo; document.getElementById('weekFrom').value = state.weekFrom; }
+    rebuildPickers(); render();
+  });
+
+  document.querySelectorAll('#segUnits button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#segUnits button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      state.unitMode = btn.getAttribute('data-unit');
+      render();
+    });
+  });
+  document.querySelectorAll('#segChannel button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#segChannel button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      state.includeCommercial = btn.getAttribute('data-channel') === 'all';
+      rebuildPickers();
+      render();
+    });
+  });
+  document.querySelectorAll('#rowLimitToggle button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#rowLimitToggle button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      rowLimit = Number(btn.getAttribute('data-limit'));
+      render();
+    });
+  });
+
+  let deb;
+  const onSearch = () => { clearTimeout(deb); deb = setTimeout(render, 200); };
+  document.getElementById('modelSearch').addEventListener('input', e => { state.model = e.target.value.trim().toLowerCase(); onSearch(); });
+
+  if (!storePickerReady){ storePickerReady = true; setupStorePicker(); setupTrendControls(); setupDetail(); }
+
+  document.getElementById('btnReset').addEventListener('click', () => {
+    state.weekFrom = weeks[0]; state.weekTo = weeks[weeks.length-1];
+    state.unitMode = 'net'; state.includeCommercial = false; state.brand = 'all'; state.banner = 'all';
+    state.model = ''; state.stores.clear(); storeFilterText = '';
+    trend.by = 'model'; trend.topN = 5; trend.hidden.clear(); detail.store = null;
+    document.getElementById('weekFrom').value = state.weekFrom;
+    document.getElementById('weekTo').value = state.weekTo;
+    document.querySelectorAll('#segUnits button').forEach(b => b.classList.toggle('active', b.getAttribute('data-unit') === 'net'));
+    document.querySelectorAll('#segChannel button').forEach(b => b.classList.toggle('active', b.getAttribute('data-channel') === 'stores'));
+    document.querySelectorAll('#brandChips .pill').forEach(b => b.classList.toggle('active', b.getAttribute('data-brand') === 'all'));
+    document.querySelectorAll('#bannerChips .pill').forEach(b => b.classList.toggle('active', b.getAttribute('data-banner') === 'all'));
+    document.querySelectorAll('#segTrendBy button').forEach(b => b.classList.toggle('active', b.getAttribute('data-by') === 'model'));
+    document.querySelectorAll('#segTrendTop button').forEach(b => b.classList.toggle('active', b.getAttribute('data-top') === '5'));
+    document.getElementById('modelSearch').value = '';
+    document.getElementById('storeFilterSearch').value = '';
+    rebuildPickers();
+    render();
+  });
+
+  document.getElementById('exportStores').addEventListener('click', exportStoreCsv);
+  document.getElementById('exportMatrix').addEventListener('click', exportMatrixCsv);
+  document.getElementById('btnPrint').addEventListener('click', () => window.print());
+  document.getElementById('srcBadge').addEventListener('click', () => {
+    document.getElementById('srcBadgeText').textContent = 'Checking…';
+    loadData();
+  });
+}
+
+function effUnits(q){ return state.unitMode === 'gross' ? Math.max(q, 0) : q; }
+
+// Filters everything except the two named keys — used to build the
+// model/store pickers so each search box still offers all its own options.
+function activeRowsExcept(...skip){
+  return rows.filter(r =>
+    r.week >= state.weekFrom && r.week <= state.weekTo &&
+    (state.brand === 'all' || r.brand === state.brand) &&
+    storeInScope(r) &&
+    (skip.includes('model') || !state.model || r.item.toLowerCase().includes(state.model) || (r.desc||'').toLowerCase().includes(state.model)) &&
+    (skip.includes('store') || !state.stores.size || state.stores.has(r.store))
+  );
+}
+function activeRows(){ return activeRowsExcept(); }
+
+// Model totals follow the same Banner / Store Type scope as everything else on
+// this page, so every table and the trend reconcile to the same total.
+function activeRowsForModels(){
+  return rows.filter(r =>
+    r.week >= state.weekFrom && r.week <= state.weekTo &&
+    (state.brand === 'all' || r.brand === state.brand) &&
+    storeInScope(r) &&
+    (!state.model || r.item.toLowerCase().includes(state.model) || (r.desc||'').toLowerCase().includes(state.model)) &&
+    (!state.stores.size || state.stores.has(r.store))
+  );
+}
+
+function aggregate(){
+  const storeRows = activeRows();
+  const modelRows = activeRowsForModels();
+
+  const models = new Map();  // item -> {desc, brand, units, selling:Set}
+  modelRows.forEach(r => {
+    let m = models.get(r.item);
+    if (!m){ m = { desc: r.desc, brand: r.brand, units: 0, selling: new Set() }; models.set(r.item, m); }
+    m.units += effUnits(r.qty);
+    if (r.qty > 0) m.selling.add(r.store);
+  });
+
+  const stores = new Map(); // store -> {units, items:Map(item->units)}
+  const pairs = new Map();  // item|store -> units (store-scoped, for the matrix — respects channel toggle)
+  storeRows.forEach(r => {
+    let s = stores.get(r.store);
+    if (!s){ s = { units: 0, items: new Map() }; stores.set(r.store, s); }
+    const u = effUnits(r.qty);
+    s.units += u;
+    s.items.set(r.item, (s.items.get(r.item) || 0) + u);
+
+    const k = r.item + '|' + r.store;
+    pairs.set(k, (pairs.get(k) || 0) + u);
+  });
+
+  return { models, stores, pairs };
+}
+
+let rowLimit = 40;
+
+function render(){
+  const { models, stores, pairs } = aggregate();
+
+  const totalUnits = [...models.values()].reduce((s,m) => s + m.units, 0);
+  const sellingModels = [...models.values()].filter(m => m.selling.size > 0).length;
+  const sellingStores = [...stores.values()].filter(s => s.units > 0).length;
+  const livePairs = [...pairs.values()].filter(v => v > 0).length;
+
+  document.getElementById('kpiUnits').textContent = fmtNum(totalUnits);
+  document.getElementById('kpiUnitsSub').textContent = state.weekFrom ? `${fmtWeekLabel(state.weekFrom)} to ${fmtWeekLabel(state.weekTo)}` : '';
+  document.getElementById('kpiModels').textContent = fmtNum(sellingModels);
+  document.getElementById('kpiModelsSub').textContent = `of ${models.size} in range`;
+  document.getElementById('kpiStores').textContent = fmtNum(sellingStores);
+  document.getElementById('kpiStoresSub').textContent = `of ${stores.size} in range`;
+  document.getElementById('kpiPairs').textContent = fmtNum(livePairs);
+
+  document.getElementById('filterSummary').textContent =
+    `${state.unitMode === 'gross' ? 'Gross units (before returns)' : 'Net units (after returns)'}` +
+    (state.banner !== 'all' ? ` · ${state.banner} only` : ' · all banners') +
+    (state.includeCommercial ? ' · including commercial & online' : ' · retail stores') +
+    (state.brand !== 'all' ? ` · ${state.brand} only` : '') +
+    (state.stores.size ? ` · ${state.stores.size} store${state.stores.size === 1 ? '' : 's'} selected` : '');
+
+  renderTrend();
+  renderDetail();
+  renderModels(models);
+  renderStores(stores);
+  renderMatrix(models, stores, pairs);
+}
+
+function renderModels(models){
+  const body = document.getElementById('modelBody');
+  const list = [...models.entries()].sort((a,b) => b[1].units - a[1].units);
+  if (!list.length){ body.innerHTML = '<tr class="empty-row"><td colspan="6">No data for this selection</td></tr>'; return; }
+  body.innerHTML = list.map(([item, m]) => {
+    const avg = m.selling.size ? m.units / m.selling.size : 0;
+    return `<tr><td class="item">${item}</td><td class="desc">${m.desc || ''}</td><td class="brand">${m.brand || '—'}</td>` +
+      `<td class="num">${fmtNum(m.units)}</td><td class="num">${fmtNum(m.selling.size)}</td><td class="num">${fmtNum(avg)}</td></tr>`;
+  }).join('');
+}
+
+function renderStores(stores){
+  const body = document.getElementById('storeBody');
+  const list = [...stores.entries()].sort((a,b) => b[1].units - a[1].units);
+  if (!list.length){ body.innerHTML = '<tr class="empty-row"><td colspan="4">No data for this selection</td></tr>'; return; }
+  body.innerHTML = list.map(([name, s]) => {
+    let top = '', topVal = -1;
+    for (const [item, v] of s.items){ if (v > topVal){ topVal = v; top = item; } }
+    return `<tr class="clickable" title="Open In Store Detail"><td>${name}</td><td class="num">${fmtNum(s.units)}</td>` +
+      `<td class="num">${fmtNum([...s.items.values()].filter(v => v > 0).length)}</td><td class="desc">${top || '—'}</td></tr>`;
+  }).join('');
+  [...body.querySelectorAll('tr.clickable')].forEach((tr, i) => tr.addEventListener('click', () => {
+    detail.store = list[i][0];
+    renderDetail();
+    document.getElementById('storeDetail').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }));
+}
+
+function renderMatrix(models, stores, pairs){
+  const modelList = [...models.entries()].sort((a,b) => b[1].units - a[1].units).map(e => e[0]);
+  let storeList = [...stores.entries()].sort((a,b) => b[1].units - a[1].units);
+  if (rowLimit) storeList = storeList.slice(0, rowLimit);
+
+  const head = document.getElementById('matrixHead');
+  head.innerHTML = '<th>Store</th>' + modelList.map(m => `<th class="num">${m}</th>`).join('') + '<th class="num">Total</th>';
+
+  const body = document.getElementById('matrixBody');
+  if (!storeList.length || !modelList.length){
+    body.innerHTML = '<tr class="empty-row"><td>No data for this selection</td></tr>';
+    return;
+  }
+  body.innerHTML = storeList.map(([name, s]) => {
+    const cells = modelList.map(m => {
+      const v = pairs.get(m + '|' + name) || 0;
+      return v ? `<td class="num">${fmtNum(v)}</td>` : '<td class="num zero">&middot;</td>';
+    }).join('');
+    return `<tr><td>${name}</td>${cells}<td class="num"><strong>${fmtNum(s.units)}</strong></td></tr>`;
+  }).join('');
+}
+
+/* ============ Weekly trend chart ============
+   One axis, lines only. A "Total" line (primary ink) plus the top-N models (or
+   stores) in fixed categorical slots; everything past N folds into one muted
+   "All Other" line so the total always reconciles. A series keeps its colour
+   for the session — changing filters never repaints the survivors. */
+const SVGNS = 'http://www.w3.org/2000/svg';
+const svgEl = (tag, attrs) => {
+  const e = document.createElementNS(SVGNS, tag);
+  for (const k in (attrs || {})) e.setAttribute(k, attrs[k]);
+  return e;
+};
+const htmlEl = (tag, cls, text) => {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text != null) e.textContent = text;
+  return e;
+};
+const fmtWeekFull = w => parseWeekToDate(w).toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' });
+
+function setupTrendControls(){
+  document.querySelectorAll('#segTrendBy button').forEach(btn => btn.addEventListener('click', () => {
+    document.querySelectorAll('#segTrendBy button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    trend.by = btn.getAttribute('data-by');
+    trend.hidden.clear();
+    renderTrend();
+  }));
+  document.querySelectorAll('#segTrendTop button').forEach(btn => btn.addEventListener('click', () => {
+    document.querySelectorAll('#segTrendTop button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    trend.topN = Number(btn.getAttribute('data-top'));
+    renderTrend();
+  }));
+}
+
+// Lowest free slot (0-7) for each shown series; existing owners keep theirs.
+function assignSlots(ids){
+  const used = new Set(), out = new Map();
+  ids.forEach(id => {
+    const s = trend.slotOf.get(id);
+    if (s != null && !used.has(s)){ used.add(s); out.set(id, s); }
+  });
+  ids.forEach(id => {
+    if (out.has(id)) return;
+    let s = 0;
+    while (used.has(s) && s < 7) s++;
+    used.add(s); out.set(id, s);
+    for (const [k, v] of [...trend.slotOf]) if (v === s) trend.slotOf.delete(k);
+    trend.slotOf.set(id, s);
+  });
+  return out;
+}
+
+function buildTrendSeries(){
+  const wk = weeks.filter(w => w >= state.weekFrom && w <= state.weekTo);
+  const idx = new Map(wk.map((w, i) => [w, i]));
+  const total = new Array(wk.length).fill(0);
+  const groups = new Map();
+  for (const r of activeRows()){
+    const i = idx.get(r.week);
+    if (i == null) continue;
+    const u = effUnits(r.qty);
+    total[i] += u;
+    const key = trend.by === 'store' ? r.store : r.item;
+    let g = groups.get(key);
+    if (!g){ g = { key, desc: trend.by === 'store' ? '' : (r.desc || ''), values: new Array(wk.length).fill(0), sum: 0 }; groups.set(key, g); }
+    g.values[i] += u; g.sum += u;
+  }
+  const ranked = [...groups.values()]
+    .filter(g => g.values.some(v => v !== 0))
+    .sort((a, b) => b.sum - a.sum || a.key.localeCompare(b.key));
+  const shown = ranked.slice(0, trend.topN), rest = ranked.slice(trend.topN);
+  const series = shown.map(g => ({ id: trend.by + ':' + g.key, name: g.key, desc: g.desc, values: g.values, sum: g.sum, other: false }));
+  if (rest.length){
+    const vals = new Array(wk.length).fill(0);
+    rest.forEach(g => g.values.forEach((v, i) => { vals[i] += v; }));
+    series.push({
+      id: trend.by + ':__other', other: true, desc: '', values: vals,
+      name: 'All Other ' + (trend.by === 'store' ? 'Stores' : 'Models') + ' (' + rest.length + ')',
+      sum: rest.reduce((s, g) => s + g.sum, 0)
+    });
+  }
+  const slots = assignSlots(series.filter(s => !s.other).map(s => s.id));
+  series.forEach(s => { s.color = s.other ? 'var(--text-muted)' : 'var(--s' + (slots.get(s.id) + 1) + ')'; });
+  return { wk, total, series };
+}
+
+/* ============ Store detail ============
+   Single-store drill-down (moved here from the main dashboard's Store Detail tab).
+   Honours the Weeks, Units, Brand and Model filters; the Stores multi-select and
+   Channel toggle don't apply because the store is chosen explicitly here. */
+const detail = { store: null, lastSig: '' };
+const detailParamStore = (() => { try { return new URLSearchParams(location.search).get('store'); } catch(e){ return null; } })();
+let detailParamPending = !!detailParamStore;
+
+function detailMatchesModel(r){
+  return !state.model || r.item.toLowerCase().includes(state.model) || (r.desc||'').toLowerCase().includes(state.model);
+}
+function trendBadge(t){
+  const span = (cls, text) => htmlEl('span', 'trendbadge ' + cls, text);
+  if (!t) return span('flat', 'No Prior Data');
+  if (t.dormant) return span('flag', 'Needs Attention');
+  if (t.isNew) return span('new', 'New');
+  if (t.pct === null) return span('flat', 'No Prior Data');
+  if (Math.abs(t.pct) < 3) return span('flat', '― Flat');
+  return span(t.pct > 0 ? 'up' : 'down', (t.pct > 0 ? '▲ ' : '▼ ') + Math.abs(Math.round(t.pct)) + '%');
+}
+// Recent momentum uses the FULL week history (ignores the Weeks filter), like the main dashboard.
+function detailTrend(store){
+  const n = weeks.length;
+  const win = n >= 2 ? Math.max(1, Math.min(3, Math.floor(n / 2))) : 0;
+  if (!win) return null;
+  const idx = new Map(weeks.map((w, i) => [w, i]));
+  const wkv = new Array(n).fill(0);
+  rows.forEach(r => {
+    if (r.store !== store) return;
+    if (state.brand !== 'all' && r.brand !== state.brand) return;
+    if (!detailMatchesModel(r)) return;
+    wkv[idx.get(r.week)] += effUnits(r.qty);
+  });
+  const total = wkv.reduce((a, b) => a + b, 0);
+  const recent = wkv.slice(n - win).reduce((a, b) => a + b, 0);
+  const prior = wkv.slice(Math.max(0, n - 2 * win), n - win).reduce((a, b) => a + b, 0);
+  let pct = null, isNew = false;
+  if (prior > 0) pct = ((recent - prior) / prior) * 100; else if (recent > 0) isNew = true;
+  return { pct, isNew, dormant: total > 0 && recent === 0 };
+}
+
+function renderDetailBars(wrap, values, labels){
+  wrap.textContent = '';
+  if (values.every(v => v === 0)){ wrap.appendChild(htmlEl('div', 'trend-empty', 'No units match the current filters')); return; }
+  const W = 560, H = 244, padL = 34, padR = 10, padT = 20, padB = 40;
+  const plotW = W - padL - padR, plotH = H - padT - padB, n = values.length;
+  const sc = niceScale(0, Math.max(...values, 1));
+  const band = plotW / n, barW = Math.min(26, band * 0.55);
+  const yAt = v => padT + plotH - (v / sc.hi) * plotH;
+  const svg = svgEl('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': 'Weekly units at this store' });
+  sc.ticks.forEach(t => {
+    const y = yAt(t);
+    svg.appendChild(svgEl('line', { class: 'gridline', x1: padL, x2: W - padR, y1: y.toFixed(1), y2: y.toFixed(1) }));
+    const tx = svgEl('text', { class: 'axis-label', x: padL - 8, y: (y + 3).toFixed(1), 'text-anchor': 'end' });
+    tx.textContent = Math.round(t); svg.appendChild(tx);
+  });
+  const maxIdx = values.indexOf(Math.max(...values));
+  const tt = htmlEl('div', 'tt');
+  values.forEach((v, i) => {
+    const x = padL + band * i + (band - barW) / 2;
+    const h = Math.max((v / sc.hi) * plotH, v > 0 ? 2 : 1.5);
+    const y = padT + plotH - h;
+    const bar = svgEl('rect', { class: 'dbar' + (v > 0 ? '' : ' zero'), x: x.toFixed(1), y: y.toFixed(1), width: barW.toFixed(1), height: h.toFixed(1), rx: 4, ry: 4 });
+    bar.addEventListener('mousemove', e => {
+      tt.textContent = '';
+      tt.appendChild(htmlEl('div', 'tt-head', fmtWeekFull(labels[i])));
+      const row = htmlEl('div', 'tt-row');
+      row.append(htmlEl('span', 'tt-val', fmtNum(v)), htmlEl('span', 'tt-name', 'unit' + (v === 1 ? '' : 's')));
+      tt.appendChild(row);
+      const r = wrap.getBoundingClientRect();
+      const left = Math.min(Math.max(e.clientX - r.left + 12, 0), Math.max(0, r.width - 200));
+      tt.style.left = left + 'px'; tt.style.top = Math.max(0, e.clientY - r.top - 54) + 'px';
+      tt.classList.add('show');
+    });
+    bar.addEventListener('mouseleave', () => tt.classList.remove('show'));
+    svg.appendChild(bar);
+    if (i === maxIdx && v > 0){
+      const lb = svgEl('text', { class: 'value-label', x: (x + barW / 2).toFixed(1), y: (y - 6).toFixed(1), 'text-anchor': 'middle' });
+      lb.textContent = fmtNum(v); svg.appendChild(lb);
+    }
+    // Every week is labelled: day on the first line, month underneath only when it changes.
+    const d = parseWeekToDate(labels[i]);
+    const mon = d.toLocaleDateString('en-AU', { month: 'short' });
+    const prevMon = i > 0 ? parseWeekToDate(labels[i - 1]).toLocaleDateString('en-AU', { month: 'short' }) : null;
+    const cx = (x + barW / 2).toFixed(1);
+    const dl = svgEl('text', { class: 'axis-label', x: cx, y: padT + plotH + 15, 'text-anchor': 'middle' });
+    dl.textContent = String(d.getDate()); svg.appendChild(dl);
+    if (mon !== prevMon){
+      const ml = svgEl('text', { class: 'axis-label', x: cx, y: padT + plotH + 28, 'text-anchor': 'middle' });
+      ml.textContent = mon; svg.appendChild(ml);
+    }
+  });
+  svg.appendChild(svgEl('line', { class: 'baseline', x1: padL, x2: W - padR, y1: (padT + plotH).toFixed(1), y2: (padT + plotH).toFixed(1) }));
+  wrap.append(svg, tt);
+}
+
+function renderDetail(){
+  const wk = weeks.filter(w => w >= state.weekFrom && w <= state.weekTo);
+  const idx = new Map(wk.map((w, i) => [w, i]));
+  const scoped = rows.filter(r => idx.has(r.week) && (state.brand === 'all' || r.brand === state.brand) && detailMatchesModel(r));
+
+  const totals = new Map();
+  Object.keys(storeMetaMap).forEach(n => { const m = storeMetaMap[n]; if ((state.banner === 'all' || m.banner === state.banner) && (state.includeCommercial || !m.commercial)) totals.set(n, 0); });
+  if (detail.store && storeMetaMap[detail.store] && !totals.has(detail.store) && state.stores.has(detail.store)) totals.set(detail.store, 0);
+  scoped.forEach(r => { if (totals.has(r.store)) totals.set(r.store, totals.get(r.store) + effUnits(r.qty)); });
+  const allNames = [...totals.keys()].sort((a, b) => a.localeCompare(b));
+  // Linked to the main Stores filter: when it is active the picker only lists the selected stores.
+  const filtered = state.stores.size > 0;
+  const names = filtered ? allNames.filter(n => state.stores.has(n)) : allNames;
+  const sig = [...state.stores].sort().join('|');
+  if (sig !== detail.lastSig){                       // the main Stores filter just changed
+    detail.lastSig = sig;
+    if (state.stores.size === 1) detail.store = [...state.stores][0];
+    else if (state.stores.size > 1 && !state.stores.has(detail.store)) detail.store = null;
+  }
+
+  if (detailParamPending && storeMetaMap[detailParamStore] && !names.includes(detailParamStore)){ names.push(detailParamStore); totals.set(detailParamStore, 0); names.sort((a,b)=>a.localeCompare(b)); }
+  if (detailParamPending && names.includes(detailParamStore)) detail.store = detailParamStore;
+  if (!detail.store || !names.includes(detail.store)){
+    detail.store = names.slice().sort((a, b) => totals.get(b) - totals.get(a) || a.localeCompare(b))[0] || null;
+  }
+
+  const sel = document.getElementById('detailStore');
+  sel.textContent = '';
+  names.forEach(n => {
+    const o = document.createElement('option');
+    o.value = n;
+    o.textContent = ((storeMetaMap[n] || {}).commercial ? n + ' (Commercial / Online)' : n) + ' — ' + fmtNum(totals.get(n) || 0) + ' units';
+    sel.appendChild(o);
+  });
+  if (detail.store) sel.value = detail.store;
+
+  const kpis = document.getElementById('detailKpis'), chart = document.getElementById('detailChart'), body = document.getElementById('detailProducts');
+  kpis.textContent = ''; body.textContent = '';
+  if (!detail.store){ chart.textContent = ''; return; }
+
+  const weekly = new Array(wk.length).fill(0);
+  const prod = new Map();
+  scoped.forEach(r => {
+    if (r.store !== detail.store) return;
+    const u = effUnits(r.qty);
+    if (u === 0) return;
+    weekly[idx.get(r.week)] += u;
+    let p = prod.get(r.item);
+    if (!p){ p = { item: r.item, desc: r.desc || '', brand: r.brand || '', qty: 0 }; prod.set(r.item, p); }
+    p.qty += u;
+  });
+
+  const total = weekly.reduce((a, b) => a + b, 0);
+  const active = weekly.filter(v => v > 0).length;
+  const avg = active ? total / active : 0;
+  const best = Math.max(...weekly, 0), bestIdx = weekly.indexOf(best);
+
+  document.getElementById('detailScope').textContent = detail.store + ' · ' + (state.unitMode === 'gross' ? 'Gross' : 'Net') + ' Units' + (filtered ? ' · Following The Stores Filter' : '');
+
+  const kpi = (label, valNode, small) => {
+    const d = htmlEl('div', 'mini-kpi');
+    d.appendChild(htmlEl('p', 'label', label));
+    const v = htmlEl('p', 'value' + (small ? ' small' : ''));
+    v.appendChild(valNode);
+    d.appendChild(v);
+    kpis.appendChild(d);
+  };
+  const txt = s => document.createTextNode(s);
+  kpi('Total Units', txt(fmtNum(total)));
+  kpi('Active Weeks', txt(active + ' / ' + wk.length));
+  kpi('Avg / Active Week', txt((Math.round(avg * 10) / 10).toLocaleString(undefined, { maximumFractionDigits: 1 })));
+  const bw = document.createDocumentFragment();
+  bw.append(txt(fmtNum(best) + ' '));
+  if (best > 0) bw.appendChild(htmlEl('span', 'when', '(' + fmtWeekLabel(wk[bestIdx]) + ')'));
+  kpi('Best Week', bw);
+  kpi('Recent Trend', trendBadge(detailTrend(detail.store)), true);
+
+  renderDetailBars(chart, weekly, wk);
+
+  const list = [...prod.values()].sort((a, b) => b.qty - a.qty || a.item.localeCompare(b.item));
+  if (!list.length){
+    const tr = htmlEl('tr', 'empty-row'); const td = htmlEl('td', null, 'No product lines match the current filters'); td.colSpan = 4; tr.appendChild(td); body.appendChild(tr);
+  } else list.forEach(p => {
+    const tr = document.createElement('tr');
+    tr.append(htmlEl('td', 'item', p.item), htmlEl('td', 'desc', p.desc), htmlEl('td', 'brand', p.brand), htmlEl('td', 'num', fmtNum(p.qty)));
+    body.appendChild(tr);
+  });
+
+  if (detailParamPending){
+    detailParamPending = false;
+    document.getElementById('storeDetail').scrollIntoView({ block: 'start' });
+  }
+}
+function setupDetail(){
+  document.getElementById('detailStore').addEventListener('change', e => { detail.store = e.target.value; renderDetail(); });
+}
+
+function niceScale(min, max){
+  const range = (max - min) || 1;
+  const rough = range / 5;
+  const pow = Math.pow(10, Math.floor(Math.log10(rough)));
+  const f = rough / pow;
+  const step = Math.max(1, (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * pow);
+  const lo = Math.floor(min / step) * step, hi = Math.ceil(max / step) * step;
+  const ticks = [];
+  for (let t = lo; t <= hi + step / 2; t += step) ticks.push(Math.round(t * 1e6) / 1e6);
+  return { lo, hi, ticks };
+}
+
+function renderTrend(){
+  const wrap = document.getElementById('trendChart');
+  const legend = document.getElementById('trendLegend');
+  const n = state.stores.size;
+  document.getElementById('trendScope').textContent =
+    (n === 0 ? 'All Stores' : n === 1 ? [...state.stores][0] : n + ' Stores Combined') +
+    ' · ' + (state.unitMode === 'gross' ? 'Gross' : 'Net') + ' Units Per Week';
+
+  const { wk, total, series } = buildTrendSeries();
+  wrap.textContent = ''; legend.textContent = '';
+  renderTrendTable(wk, total, series);
+  if (!wk.length || !series.length){
+    wrap.appendChild(htmlEl('div', 'trend-empty', 'No data for this selection'));
+    return;
+  }
+
+  const vis = series.filter(s => !trend.hidden.has(s.id));
+  const allVals = total.concat(...vis.map(s => s.values));
+  const sc = niceScale(Math.min(0, ...allVals), Math.max(1, ...allVals));
+  const W = 1100, H = 340, L = 44, R = 150, T = 16, B = 30;
+  const plotW = W - L - R, plotH = H - T - B;
+  const x = i => wk.length === 1 ? L + plotW / 2 : L + i * plotW / (wk.length - 1);
+  const y = v => T + (sc.hi - v) / (sc.hi - sc.lo) * plotH;
+
+  const svg = svgEl('svg', {
+    viewBox: '0 0 ' + W + ' ' + H, role: 'img', tabindex: '0',
+    'aria-label': 'Weekly units trend. Use the left and right arrow keys to read each week.'
+  });
+
+  sc.ticks.forEach(t => {
+    svg.appendChild(svgEl('line', { class: t === 0 ? 'baseline' : 'gridline', x1: L, x2: W - R, y1: y(t), y2: y(t) }));
+    const lab = svgEl('text', { class: 'axis-label', x: L - 8, y: y(t) + 3.5, 'text-anchor': 'end' });
+    lab.textContent = fmtNum(t);
+    svg.appendChild(lab);
+  });
+  const step = Math.max(1, Math.ceil(wk.length / Math.floor(plotW / 62)));
+  wk.forEach((w, i) => {
+    if ((wk.length - 1 - i) % step !== 0) return;
+    const lab = svgEl('text', { class: 'axis-label', x: x(i), y: H - 8, 'text-anchor': 'middle' });
+    lab.textContent = fmtWeekLabel(w);
+    svg.appendChild(lab);
+  });
+
+  const drawLine = (values, color) => {
+    if (wk.length > 1){
+      const d = values.map((v, i) => (i ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(v).toFixed(1)).join(' ');
+      svg.appendChild(svgEl('path', { class: 'series-line', d, style: 'stroke:' + color }));
+    }
+    const last = values.length - 1;
+    svg.appendChild(svgEl('circle', { cx: x(last), cy: y(values[last]), r: 4, style: 'fill:' + color + ';stroke:var(--surface);stroke-width:2' }));
+  };
+  vis.forEach(s => drawLine(s.values, s.color));
+  drawLine(total, 'var(--text-primary)');
+
+  // End labels — Total always; others only where they don't collide.
+  const last = wk.length - 1;
+  const labels = [{ y: y(total[last]), text: 'Total', cls: 'end-label total' }];
+  vis.slice().sort((a, b) => b.values[last] - a.values[last]).forEach(s => {
+    const yy = y(s.values[last]);
+    if (labels.every(l => Math.abs(l.y - yy) >= 13)){
+      const nm = s.other ? (trend.by === 'store' ? 'Other Stores' : 'Other Models') : s.name;
+      labels.push({ y: yy, text: nm.length > 21 ? nm.slice(0, 20) + '…' : nm, cls: 'end-label' });
+    }
+  });
+  labels.forEach(l => {
+    const t = svgEl('text', { class: l.cls, x: W - R + 12, y: l.y + 3.5 });
+    t.textContent = l.text;
+    svg.appendChild(t);
+  });
+
+  // Hover layer: crosshair snaps to the nearest week; one tooltip lists every visible series.
+  const cross = svgEl('line', { class: 'crosshair', y1: T, y2: T + plotH, style: 'display:none' });
+  const dotG = svgEl('g');
+  const overlay = svgEl('rect', { x: L - 10, y: T, width: plotW + 20, height: plotH, fill: 'transparent' });
+  svg.append(cross, dotG, overlay);
+  const tt = htmlEl('div', 'tt');
+  wrap.append(svg, tt);
+
+  let cur = null;
+  const hide = () => { cur = null; cross.style.display = 'none'; dotG.textContent = ''; tt.classList.remove('show'); };
+  const showAt = i => {
+    cur = i;
+    const xs = x(i);
+    cross.setAttribute('x1', xs); cross.setAttribute('x2', xs); cross.style.display = '';
+    dotG.textContent = '';
+    const rowsOut = [{ name: 'Total', color: 'var(--text-primary)', v: total[i], total: true }]
+      .concat(vis.map(s => ({ name: s.name, color: s.color, v: s.values[i], desc: s.desc })).sort((a, b) => b.v - a.v));
+    rowsOut.forEach(r => dotG.appendChild(svgEl('circle', { cx: xs, cy: y(r.v), r: 4, style: 'fill:' + r.color + ';stroke:var(--surface);stroke-width:2' })));
+
+    tt.textContent = '';
+    tt.appendChild(htmlEl('div', 'tt-head', 'Week of ' + fmtWeekFull(wk[i])));
+    rowsOut.forEach(r => {
+      const row = htmlEl('div', 'tt-row' + (r.total ? ' total' : ''));
+      const key = htmlEl('span', 'tt-key'); key.style.background = r.color;
+      row.append(key, htmlEl('span', 'tt-val', fmtNum(r.v)), htmlEl('span', 'tt-name', r.name));
+      tt.appendChild(row);
+    });
+    tt.classList.add('show');
+    const rect = svg.getBoundingClientRect(), k = rect.width / W;
+    const ttw = tt.offsetWidth;
+    let left = xs * k + 14;
+    if (left + ttw > rect.width) left = xs * k - ttw - 14;
+    tt.style.left = Math.max(0, left) + 'px';
+    tt.style.top = (T * k) + 'px';
+  };
+  const idxFromEvent = e => {
+    const r = svg.getBoundingClientRect();
+    const px = (e.clientX - r.left) / r.width * W;
+    if (wk.length === 1) return 0;
+    return Math.min(wk.length - 1, Math.max(0, Math.round((px - L) / plotW * (wk.length - 1))));
+  };
+  overlay.addEventListener('pointermove', e => showAt(idxFromEvent(e)));
+  overlay.addEventListener('pointerdown', e => showAt(idxFromEvent(e)));
+  overlay.addEventListener('pointerleave', hide);
+  svg.addEventListener('focus', () => { if (cur == null) showAt(wk.length - 1); });
+  svg.addEventListener('blur', hide);
+  svg.addEventListener('keydown', e => {
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    e.preventDefault();
+    const base = cur == null ? wk.length - 1 : cur;
+    showAt(Math.min(wk.length - 1, Math.max(0, base + (e.key === 'ArrowRight' ? 1 : -1))));
+  });
+
+  // Legend: always present; click a chip to hide/show that line (Total stays).
+  const tChip = htmlEl('span', 'legend-chip static');
+  const tKey = htmlEl('span', 'lkey'); tKey.style.background = 'var(--text-primary)';
+  tChip.append(tKey, htmlEl('span', null, 'Total'), htmlEl('span', 'lunits', fmtNum(total.reduce((a, b) => a + b, 0))));
+  legend.appendChild(tChip);
+  series.forEach(s => {
+    const b = htmlEl('button', 'legend-chip');
+    b.type = 'button';
+    b.setAttribute('aria-pressed', String(!trend.hidden.has(s.id)));
+    if (s.desc) b.title = s.desc;
+    const key = htmlEl('span', 'lkey'); key.style.background = s.color;
+    b.append(key, htmlEl('span', null, s.name), htmlEl('span', 'lunits', fmtNum(s.sum)));
+    b.addEventListener('click', () => {
+      if (trend.hidden.has(s.id)) trend.hidden.delete(s.id); else trend.hidden.add(s.id);
+      renderTrend();
+    });
+    legend.appendChild(b);
+  });
+}
+
+function renderTrendTable(wk, total, series){
+  const t = document.getElementById('trendTable');
+  t.textContent = '';
+  if (!wk.length || !series.length) return;
+  const thead = htmlEl('thead'), hr = htmlEl('tr');
+  hr.appendChild(htmlEl('th', null, trend.by === 'store' ? 'Store' : 'Model'));
+  wk.forEach(w => hr.appendChild(htmlEl('th', 'num', fmtWeekLabel(w))));
+  hr.appendChild(htmlEl('th', 'num', 'Total'));
+  thead.appendChild(hr); t.appendChild(thead);
+  const tbody = htmlEl('tbody');
+  const addRow = (name, values, strong) => {
+    const tr = htmlEl('tr');
+    tr.appendChild(htmlEl('td', 'item', name));
+    values.forEach(v => tr.appendChild(htmlEl('td', 'num', fmtNum(v))));
+    const sum = values.reduce((a, b) => a + b, 0);
+    tr.appendChild(htmlEl('td', 'num', fmtNum(sum)));
+    if (strong) tr.style.fontWeight = '700';
+    tbody.appendChild(tr);
+  };
+  addRow('Total', total, true);
+  series.forEach(s => addRow(s.name, s.values, false));
+  t.appendChild(tbody);
+}
+
+/* ---------- CSV export ---------- */
+function download(name, text){
+  const blob = new Blob([text], { type: 'text/csv;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+const csvCell = v => {
+  const s = String(v == null ? '' : v);
+  return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+};
+const rangeTag = () => (state.weekFrom || '') + '_to_' + (state.weekTo || '');
+
+function exportStoreCsv(){
+  const { stores } = aggregate();
+  const lines = [['Store', 'Total Units', 'Items Sold'].join(',')];
+  for (const [name, s] of [...stores.entries()].sort((a,b) => b[1].units - a[1].units)){
+    lines.push([name, s.units, [...s.items.values()].filter(v => v > 0).length].map(csvCell).join(','));
+  }
+  download('harvey_norman_by_store_' + rangeTag() + '.csv', lines.join('\n'));
+}
+
+function exportMatrixCsv(){
+  const { models, stores, pairs } = aggregate();
+  const modelList = [...models.entries()].sort((a,b) => b[1].units - a[1].units).map(e => e[0]);
+  const head = ['Store'].concat(modelList.map(m => m + ' - ' + (models.get(m).desc || '').slice(0,40))).concat(['Total']);
+  const lines = [head.map(csvCell).join(',')];
+  for (const [name, s] of [...stores.entries()].sort((a,b) => b[1].units - a[1].units)){
+    const row = [name];
+    let tot = 0;
+    for (const m of modelList){
+      const v = pairs.get(m + '|' + name) || 0;
+      tot += v;
+      row.push(v);
+    }
+    row.push(tot);
+    lines.push(row.map(csvCell).join(','));
+  }
+  download('harvey_norman_model_x_store_' + rangeTag() + '.csv', lines.join('\n'));
+}
+
+loadData();
+</script>
+</body>
+</html>
