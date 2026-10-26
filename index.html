@@ -478,7 +478,7 @@ const EMBEDDED_DATA = {"weeks":["2026-07-05","2026-07-12","2026-07-19","2026-07-
 // Banner / store type for the snapshot are derived from the store name (same rules as the upload parser).
 EMBEDDED_DATA.meta = Object.fromEntries(EMBEDDED_DATA.stores.map(n => [n, {
   banner: ({HN:'Harvey Norman', DM:'Domayne', JM:'Joyce Mayne'})[n.split(' ')[0]] || 'Other',
-  commercial: /\b(COMM|COMMERCIAL|INSURANCE|AVIT|ONLINE)\b/i.test(n)
+  commercial: /\b(COMM|CMML|COMMERCIAL|INSURANCE|AVIT|ONLINE|PROJECTS?)\b/i.test(n)
 }]));
 
 let DATA = EMBEDDED_DATA;
@@ -1322,10 +1322,10 @@ async function attemptLiveLoad(){
    - Sales sheet: one row per SKU (PRODUCT, PROD DESC, TOTAL SALES, ...), store columns from column G onward.
    The store columns are matched by NAME (they shift between weeks and sheets), and only
    non-zero cells are saved. Every store column is also sent so zero-sale stores show in No Movement. */
-const KEEP_UPPER = new Set(['HN','DM','JM','QV','AVIT']);
+const KEEP_UPPER = new Set(['HN','DM','JM','QV','AVIT','CMML']);
 function prettyStore(raw){
   return String(raw).trim().split(/\s+/).map(w=>{
-    if (KEEP_UPPER.has(w)) return w;
+    if (KEEP_UPPER.has(w) || w.includes('/')) return w;
     if (w === 'AT') return 'at';
     let x = w.toLowerCase().replace(/(^|-)([a-z])/g, (m,a,b)=>a+b.toUpperCase());
     if (/^o'[a-z]/i.test(x)) x = "O'" + x[2].toUpperCase() + x.slice(3);
@@ -1333,7 +1333,7 @@ function prettyStore(raw){
   }).join(' ');
 }
 function bannerOf(raw){ return ({HN:'Harvey Norman', DM:'Domayne', JM:'Joyce Mayne'})[String(raw).trim().split(/\s+/)[0]] || 'Other'; }
-function isCommercialStore(raw){ return /\b(COMM|COMMERCIAL|INSURANCE|AVIT|ONLINE)\b/.test(String(raw).toUpperCase()); }
+function isCommercialStore(raw){ return /\b(COMM|CMML|COMMERCIAL|INSURANCE|AVIT|ONLINE|PROJECTS?)\b/.test(String(raw).toUpperCase()); }
 const pad2 = n => String(n).padStart(2,'0');
 function cellToISODate(v){
   if (typeof v === 'number' && isFinite(v)){
