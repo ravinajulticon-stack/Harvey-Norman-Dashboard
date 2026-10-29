@@ -414,7 +414,7 @@ footer{text-align:center;font-size:11.5px;color:var(--text-muted);padding-top:4p
     <div class="table-scroll">
       <table>
         <thead><tr>
-          <th>Store</th><th class="num">Total Units</th><th class="num">Items Sold</th><th>Top Item</th>
+          <th>Store</th><th class="num">Total Units</th><th class="num" id="thLatest">Latest Week</th><th>Top Item</th>
         </tr></thead>
         <tbody id="storeBody"></tbody>
       </table>
@@ -827,13 +827,14 @@ function aggregate(){
     if (r.qty > 0) m.selling.add(r.store);
   });
 
-  const stores = new Map(); // store -> {units, items:Map(item->units)}
+  const stores = new Map(); // store -> {units, latest (units in the last week of the range), items:Map(item->units)}
   const pairs = new Map();  // item|store -> units (store-scoped, for the matrix — respects channel toggle)
   storeRows.forEach(r => {
     let s = stores.get(r.store);
-    if (!s){ s = { units: 0, items: new Map() }; stores.set(r.store, s); }
+    if (!s){ s = { units: 0, latest: 0, items: new Map() }; stores.set(r.store, s); }
     const u = effUnits(r.qty);
     s.units += u;
+    if (r.week === state.weekTo) s.latest += u;
     s.items.set(r.item, (s.items.get(r.item) || 0) + u);
 
     const k = r.item + '|' + r.store;
@@ -886,15 +887,18 @@ function renderModels(models){
   }).join('');
 }
 
+function latestWeekHeader(){ return state.weekTo ? `Latest Week (${fmtWeekLabel(state.weekTo)})` : 'Latest Week'; }
+
 function renderStores(stores){
   const body = document.getElementById('storeBody');
+  document.getElementById('thLatest').textContent = latestWeekHeader();
   const list = [...stores.entries()].sort((a,b) => b[1].units - a[1].units);
   if (!list.length){ body.innerHTML = '<tr class="empty-row"><td colspan="4">No data for this selection</td></tr>'; return; }
   body.innerHTML = list.map(([name, s]) => {
     let top = '', topVal = -1;
     for (const [item, v] of s.items){ if (v > topVal){ topVal = v; top = item; } }
     return `<tr class="clickable" title="Open In Store Detail"><td>${name}</td><td class="num">${fmtNum(s.units)}</td>` +
-      `<td class="num">${fmtNum([...s.items.values()].filter(v => v > 0).length)}</td><td class="desc">${top || '—'}</td></tr>`;
+      `<td class="num">${fmtNum(s.latest)}</td><td class="desc">${top || '—'}</td></tr>`;
   }).join('');
   [...body.querySelectorAll('tr.clickable')].forEach((tr, i) => tr.addEventListener('click', () => {
     detail.store = list[i][0];
@@ -1401,9 +1405,9 @@ const rangeTag = () => (state.weekFrom || '') + '_to_' + (state.weekTo || '');
 
 function exportStoreCsv(){
   const { stores } = aggregate();
-  const lines = [['Store', 'Total Units', 'Items Sold'].join(',')];
+  const lines = [['Store', 'Total Units', latestWeekHeader()].map(csvCell).join(',')];
   for (const [name, s] of [...stores.entries()].sort((a,b) => b[1].units - a[1].units)){
-    lines.push([name, s.units, [...s.items.values()].filter(v => v > 0).length].map(csvCell).join(','));
+    lines.push([name, s.units, s.latest].map(csvCell).join(','));
   }
   download('harvey_norman_by_store_' + rangeTag() + '.csv', lines.join('\n'));
 }
