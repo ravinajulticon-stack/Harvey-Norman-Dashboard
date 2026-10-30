@@ -1311,7 +1311,7 @@ function renderTrend(){
     rowsOut.forEach(r => dotG.appendChild(svgEl('circle', { cx: xs, cy: y(r.v), r: 4, style: 'fill:' + r.color + ';stroke:var(--surface);stroke-width:2' })));
 
     tt.textContent = '';
-    tt.appendChild(htmlEl('div', 'tt-head', 'Week of ' + fmtWeekFull(wk[i])));
+    tt.appendChild(htmlEl('div', 'tt-head', 'Week Ending ' + fmtWeekFull(wk[i])));
     rowsOut.forEach(r => {
       const row = htmlEl('div', 'tt-row' + (r.total ? ' total' : ''));
       const key = htmlEl('span', 'tt-key'); key.style.background = r.color;
